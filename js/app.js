@@ -2,6 +2,8 @@ let currentCombos = [];
 let currentComboIndex = 0;
 let currentWeddingDate = null;
 let currentBudgetTarget = 30000;
+let currentBudgetMin = 0;
+let currentBudgetMax = Infinity;
 let currentReplacingType = null;
 
 function initContractView() {
@@ -54,7 +56,8 @@ function renderContractPreviewFromForm() {
     emceeId: document.getElementById('contract-emcee').value || null,
     photographerId: document.getElementById('contract-photographer').value || null,
     cameramanId: document.getElementById('contract-cameraman').value || null,
-    makeupId: document.getElementById('contract-makeup').value || null
+    makeupId: document.getElementById('contract-makeup').value || null,
+    remark: document.getElementById('contract-remark') ? document.getElementById('contract-remark').value : ''
   };
   const data = buildContractData(formData);
   document.getElementById('contract-preview').innerHTML = renderContractPreview(data);
@@ -126,9 +129,13 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('booking-type').addEventListener('change', function() {
     populateBookingStaffSelect(this.value);
     document.getElementById('conflict-warning').classList.add('hidden');
+    const submitBtn = document.querySelector('#booking-form button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = false;
+    setTimeout(checkBookingConflict, 50);
   });
 
   document.getElementById('booking-staff').addEventListener('change', checkBookingConflict);
+  document.getElementById('booking-date').addEventListener('input', checkBookingConflict);
   document.getElementById('booking-date').addEventListener('change', checkBookingConflict);
 
   document.getElementById('booking-form').addEventListener('submit', function(e) {
@@ -161,12 +168,14 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   ['contract-emcee', 'contract-photographer', 'contract-cameraman', 'contract-makeup',
-   'contract-customer', 'contract-phone', 'contract-date'].forEach(id => {
-    document.getElementById(id).addEventListener('change', function() {
+   'contract-customer', 'contract-phone', 'contract-date', 'contract-remark'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', function() {
       updateContractTotal();
       renderContractPreviewFromForm();
     });
-    document.getElementById(id).addEventListener('input', function() {
+    el.addEventListener('input', function() {
       updateContractTotal();
       renderContractPreviewFromForm();
     });
@@ -178,6 +187,9 @@ document.addEventListener('DOMContentLoaded', function() {
       if (opt.dataset.date) document.getElementById('contract-date').value = opt.dataset.date;
       if (opt.dataset.customer) document.getElementById('contract-customer').value = opt.dataset.customer;
       if (opt.dataset.phone) document.getElementById('contract-phone').value = opt.dataset.phone;
+      if (opt.dataset.remark && document.getElementById('contract-remark')) {
+        document.getElementById('contract-remark').value = opt.dataset.remark;
+      }
       if (opt.dataset.emcee) document.getElementById('contract-emcee').value = opt.dataset.emcee;
       if (opt.dataset.photographer) document.getElementById('contract-photographer').value = opt.dataset.photographer;
       if (opt.dataset.cameraman) document.getElementById('contract-cameraman').value = opt.dataset.cameraman;
@@ -252,7 +264,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function handleRecommend() {
   const date = document.getElementById('wedding-date').value;
   const budgetMin = parseInt(document.getElementById('budget-min').value) || 0;
-  const budgetMax = parseInt(document.getElementById('budget-max').value) || Infinity;
+  const budgetMax = parseInt(document.getElementById('budget-max').value) || 99999999;
   const budgetTarget = parseInt(document.getElementById('budget-target').value) || 30000;
 
   if (!date) {
@@ -263,9 +275,15 @@ function handleRecommend() {
     showToast('婚礼日期不能早于今天', 'error');
     return;
   }
+  if (budgetMin > budgetMax) {
+    showToast('最低预算不能大于最高预算', 'error');
+    return;
+  }
 
   currentWeddingDate = date;
   currentBudgetTarget = budgetTarget;
+  currentBudgetMin = budgetMin;
+  currentBudgetMax = budgetMax;
 
   const { combos, missing } = generateAllCombos(date);
 
@@ -282,31 +300,76 @@ function handleRecommend() {
     return;
   }
 
-  currentCombos = sortCombosByBudget(combos, budgetTarget, budgetMin, budgetMax);
-  currentComboIndex = 0;
+  const inBudgetCombos = combos.filter(c =>
+    c.totalPrice >= budgetMin && c.totalPrice <= budgetMax
+  );
 
-  if (currentCombos.length === 0) {
+  if (inBudgetCombos.length === 0) {
+    const prices = combos.map(c => c.totalPrice).sort((a, b) => a - b);
+    const lowestPrice = prices[0];
+    const highestPrice = prices[prices.length - 1];
+
     document.getElementById('recommend-empty').classList.remove('hidden');
     document.getElementById('recommend-results').classList.add('hidden');
+
+    let suggestHTML = '';
+    if (lowestPrice > budgetMax) {
+      const diff = lowestPrice - budgetMax;
+      suggestHTML = `<p style="color:#C9184A;margin-top:12px;font-size:14px;">当前所有组合均超出预算范围，最低价格 ${formatCurrency(lowestPrice)}，比您的最高预算高出 ${formatCurrency(diff)}</p>`;
+    } else if (highestPrice < budgetMin) {
+      suggestHTML = `<p style="color:#2D6A4F;margin-top:12px;font-size:14px;">当前所有组合均低于您的最低预算，最高价格 ${formatCurrency(highestPrice)}</p>`;
+    } else {
+      suggestHTML = `<p style="color:#B8956A;margin-top:12px;font-size:14px;">您的预算范围为 ${formatCurrency(budgetMin)} - ${formatCurrency(budgetMax)}<br>当前可用组合价格范围为 ${formatCurrency(lowestPrice)} - ${formatCurrency(highestPrice)}</p>`;
+    }
+
     document.getElementById('recommend-empty').innerHTML = `
       <div class="empty-illustration">💐</div>
-      <p class="empty-text">已为您找到 ${combos.length} 组组合</p>
-      <p style="color:#A0896C;margin-top:8px;font-size:13px;">但没有完全符合预算范围 ${formatCurrency(budgetMin)} - ${formatCurrency(budgetMax)} 的组合</p>
-      <button class="btn btn-secondary" style="margin-top:16px;" onclick="document.getElementById('budget-min').value=0;document.getElementById('budget-max').value=999999;handleRecommend();">
-        清除预算限制，查看全部组合
-      </button>
+      <p class="empty-text">已为您找到 ${combos.length} 组可用组合</p>
+      ${suggestHTML}
+      <p style="color:#A0896C;margin-top:12px;font-size:13px;">但没有完全符合您预算范围 ${formatCurrency(budgetMin)} - ${formatCurrency(budgetMax)} 的组合</p>
+      <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="relaxBudget('expand_min');">
+          降低最低预算至 ${formatCurrency(lowestPrice < budgetMin ? 0 : Math.max(0, budgetMin - 5000))}
+        </button>
+        <button class="btn btn-primary" onclick="relaxBudget('expand_max');">
+          提高最高预算至 ${formatCurrency(highestPrice > budgetMax ? highestPrice : budgetMax + 5000)}
+        </button>
+        <button class="btn btn-secondary" onclick="relaxBudget('clear_all');">
+          清除所有预算限制
+        </button>
+      </div>
     `;
     return;
   }
 
+  currentCombos = sortCombosByBudget(inBudgetCombos, budgetTarget, budgetMin, budgetMax);
+  currentComboIndex = 0;
+
   document.getElementById('recommend-empty').classList.add('hidden');
   document.getElementById('recommend-results').classList.remove('hidden');
 
-  const subtitle = `${date} · 共找到 ${currentCombos.length} 组匹配组合 · 按预算接近度排序`;
+  const subtitle = `${date} · 共找到 ${currentCombos.length} 组匹配组合 · 按预算接近度排序 · 预算范围 ${formatCurrency(budgetMin)}-${formatCurrency(budgetMax)}`;
   document.getElementById('results-subtitle').textContent = subtitle;
 
   updateComboDisplay();
   showToast(`已为您匹配 ${currentCombos.length} 组黄金组合！`, 'success');
+}
+
+function relaxBudget(mode) {
+  const { combos } = generateAllCombos(currentWeddingDate);
+  const prices = combos.map(c => c.totalPrice).sort((a, b) => a - b);
+  const lowestPrice = prices[0];
+  const highestPrice = prices[prices.length - 1];
+
+  if (mode === 'expand_min') {
+    document.getElementById('budget-min').value = lowestPrice < currentBudgetMin ? 0 : Math.max(0, currentBudgetMin - 5000);
+  } else if (mode === 'expand_max') {
+    document.getElementById('budget-max').value = highestPrice > currentBudgetMax ? highestPrice : currentBudgetMax + 5000;
+  } else if (mode === 'clear_all') {
+    document.getElementById('budget-min').value = 0;
+    document.getElementById('budget-max').value = 99999999;
+  }
+  handleRecommend();
 }
 
 function updateComboDisplay() {
@@ -321,9 +384,12 @@ function updateComboDisplay() {
 function handleReplace(type) {
   if (currentCombos.length === 0) return;
   const currentCombo = currentCombos[currentComboIndex];
-  const candidates = getReplaceCandidates(currentCombo, type, currentBudgetTarget, currentWeddingDate);
+  const candidates = getReplaceCandidates(
+    currentCombo, type, currentBudgetTarget, currentWeddingDate,
+    currentBudgetMin, currentBudgetMax
+  );
   const currentStaff = currentCombo[type];
-  renderReplaceModal(candidates, currentStaff, currentBudgetTarget);
+  renderReplaceModal(candidates, currentStaff, currentBudgetTarget, currentBudgetMin, currentBudgetMax);
 }
 
 function applyReplacement(type, newStaffId) {
@@ -334,13 +400,20 @@ function applyReplacement(type, newStaffId) {
 
   const oldStaff = combo[type];
   const othersTotal = combo.totalPrice - oldStaff.price;
+  const newTotal = othersTotal + newStaff.price;
+
+  if (newTotal < currentBudgetMin || newTotal > currentBudgetMax) {
+    if (!confirm(`换人后新组合总价为 ${formatCurrency(newTotal)}，超出您设定的预算范围 ${formatCurrency(currentBudgetMin)} - ${formatCurrency(currentBudgetMax)}。\n\n是否仍要继续？`)) {
+      return;
+    }
+  }
 
   const newCombo = {
     ...combo,
     [type]: newStaff,
-    totalPrice: othersTotal + newStaff.price
+    totalPrice: newTotal
   };
-  newCombo.budgetDiff = Math.abs(newCombo.totalPrice - currentBudgetTarget);
+  newCombo.budgetDiff = Math.abs(newTotal - currentBudgetTarget);
 
   currentCombos[currentComboIndex] = newCombo;
 
@@ -373,35 +446,107 @@ function handleConfirmBooking() {
   const cameraman = combo.cameraman;
   const makeup = combo.makeup;
 
-  const msg = `确认预订以下人员？\n\n📅 日期：${currentWeddingDate}\n🎤 司仪：${emcee.name} (${formatCurrency(emcee.price)})\n📷 摄影：${photographer.name} (${formatCurrency(photographer.price)})\n🎥 摄像：${cameraman.name} (${formatCurrency(cameraman.price)})\n💄 化妆：${makeup.name} (${formatCurrency(makeup.price)})\n\n💰 总价：${formatCurrency(combo.totalPrice)}`;
+  const summaryHTML = `
+    <div style="background:#FFF8F0;border-radius:12px;padding:16px 20px;margin-bottom:20px;border:1px solid #E8C4A0;">
+      <div style="font-size:12px;color:#A0896C;letter-spacing:1px;margin-bottom:8px;">📅 预订日期：<strong style="color:#3D2914;">${currentWeddingDate}</strong></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;font-size:13px;color:#6B4423;">
+        <div>🎤 司仪：<strong style="color:#3D2914;">${emcee.name}</strong> <span style="color:#B8956A;">· ${formatCurrency(emcee.price)}</span></div>
+        <div>📷 摄影：<strong style="color:#3D2914;">${photographer.name}</strong> <span style="color:#B8956A;">· ${formatCurrency(photographer.price)}</span></div>
+        <div>🎥 摄像：<strong style="color:#3D2914;">${cameraman.name}</strong> <span style="color:#B8956A;">· ${formatCurrency(cameraman.price)}</span></div>
+        <div>💄 化妆：<strong style="color:#3D2914;">${makeup.name}</strong> <span style="color:#B8956A;">· ${formatCurrency(makeup.price)}</span></div>
+      </div>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px dashed #E8C4A0;text-align:right;">
+        <span style="color:#6B4423;">组合总价：</span><strong style="font-family:'Playfair Display',serif;font-size:22px;background:linear-gradient(135deg,#B8956A,#D4A574);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">${formatCurrency(combo.totalPrice)}</strong>
+      </div>
+    </div>
+  `;
 
-  if (!confirm(msg)) return;
+  const html = `
+    <div class="modal-header">
+      <h3 class="modal-title">📝 确认预订并完善客户信息</h3>
+      <p class="modal-subtitle">请填写客户信息，将与预订记录一起保存并自动带入合同</p>
+    </div>
+    <div class="modal-body" style="padding:20px 28px;">
+      ${summaryHTML}
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">客户姓名 <span style="color:#C9184A;">*</span></label>
+            <input type="text" id="pre-customer" class="form-input" placeholder="请输入新人姓名" style="width:100%;">
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">联系电话 <span style="color:#C9184A;">*</span></label>
+            <input type="tel" id="pre-phone" class="form-input" placeholder="请输入联系电话" style="width:100%;">
+          </div>
+        </div>
+        <div>
+          <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">订单备注</label>
+          <textarea id="pre-remark" class="form-input" rows="3" placeholder="可选：如婚礼地点、特殊要求、对接说明等..." style="width:100%;resize:vertical;font-family:'Noto Serif SC',serif;"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="modal-cancel">返回修改</button>
+      <button class="btn btn-primary" id="modal-confirm-booking">
+        <span class="btn-icon">✓</span> 确认预订并生成合同
+      </button>
+    </div>
+  `;
 
-  const booking = addBooking({
-    date: currentWeddingDate,
-    customerName: '',
-    customerPhone: '',
-    emceeId: emcee.id,
-    photographerId: photographer.id,
-    cameramanId: cameraman.id,
-    makeupId: makeup.id,
-    totalPrice: combo.totalPrice
-  });
-
-  showToast('预订成功！即将跳转至合同页面...', 'success');
+  showModal(html);
 
   setTimeout(() => {
-    switchView('contract');
-    document.getElementById('contract-date').value = currentWeddingDate;
-    document.getElementById('contract-emcee').value = emcee.id;
-    document.getElementById('contract-photographer').value = photographer.id;
-    document.getElementById('contract-cameraman').value = cameraman.id;
-    document.getElementById('contract-makeup').value = makeup.id;
-    document.getElementById('contract-no').value = generateContractNo();
-    updateContractTotal();
-    renderContractPreviewFromForm();
-    populateContractBookingSelect();
-  }, 800);
+    const confirmBtn = document.getElementById('modal-confirm-booking');
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', function() {
+        const customerName = document.getElementById('pre-customer').value.trim();
+        const customerPhone = document.getElementById('pre-phone').value.trim();
+        const remark = document.getElementById('pre-remark').value.trim();
+
+        if (!customerName) {
+          showToast('请填写客户姓名', 'error');
+          return;
+        }
+        if (!customerPhone) {
+          showToast('请填写联系电话', 'error');
+          return;
+        }
+
+        const booking = addBooking({
+          date: currentWeddingDate,
+          customerName: customerName,
+          customerPhone: customerPhone,
+          remark: remark,
+          emceeId: emcee.id,
+          photographerId: photographer.id,
+          cameramanId: cameraman.id,
+          makeupId: makeup.id,
+          totalPrice: combo.totalPrice
+        });
+
+        hideModal();
+        showToast('预订成功！正在跳转至合同页面...', 'success');
+
+        setTimeout(() => {
+          switchView('contract');
+          document.getElementById('contract-date').value = currentWeddingDate;
+          document.getElementById('contract-customer').value = customerName;
+          document.getElementById('contract-phone').value = customerPhone;
+          if (document.getElementById('contract-remark')) {
+            document.getElementById('contract-remark').value = remark;
+          }
+          document.getElementById('contract-emcee').value = emcee.id;
+          document.getElementById('contract-photographer').value = photographer.id;
+          document.getElementById('contract-cameraman').value = cameraman.id;
+          document.getElementById('contract-makeup').value = makeup.id;
+          document.getElementById('contract-no').value = generateContractNo();
+          updateContractTotal();
+          renderContractPreviewFromForm();
+          populateContractBookingSelect();
+        }, 600);
+      });
+    }
+  }, 50);
 }
 
 function checkBookingConflict() {
@@ -413,6 +558,14 @@ function checkBookingConflict() {
 
   if (!staffId || !date) {
     warning.classList.add('hidden');
+    if (submitBtn) submitBtn.disabled = !staffId || !date;
+    return;
+  }
+
+  if (date < getToday()) {
+    warning.classList.remove('hidden');
+    warningText.textContent = '⚠️ 预订日期不能早于今天';
+    if (submitBtn) submitBtn.disabled = true;
     return;
   }
 
@@ -433,6 +586,7 @@ function handleManualBooking() {
   const date = document.getElementById('booking-date').value;
   const customerName = document.getElementById('booking-customer').value.trim();
   const customerPhone = document.getElementById('booking-phone').value.trim();
+  const remark = document.getElementById('booking-remark') ? document.getElementById('booking-remark').value.trim() : '';
 
   if (!staffId || !date) {
     showToast('请选择人员和日期', 'error');
@@ -449,15 +603,19 @@ function handleManualBooking() {
     return;
   }
 
-  const result = addSingleBooking(type, staffId, date, customerName, customerPhone);
+  const result = addSingleBooking(type, staffId, date, customerName, customerPhone, remark);
   if (result.success) {
     showToast('预订保存成功！', 'success');
     document.getElementById('booking-customer').value = '';
     document.getElementById('booking-phone').value = '';
+    if (document.getElementById('booking-remark')) {
+      document.getElementById('booking-remark').value = '';
+    }
     document.getElementById('conflict-warning').classList.add('hidden');
     renderStaffList(document.querySelector('.staff-tab.active').dataset.type);
     renderBookingList();
     populateContractBookingSelect();
+    checkBookingConflict();
   } else {
     showToast(result.message, 'error');
   }

@@ -25,11 +25,25 @@ function buildContractData(formData) {
 
   const totalPrice = staffList.reduce((sum, s) => sum + s.price, 0);
 
+  let serviceLevel = '单项服务';
+  if (staffList.length === 4 && emcee && photographer && cameraman && makeup) {
+    serviceLevel = '🎎 四大金刚整套服务';
+  } else if (staffList.length > 1) {
+    serviceLevel = `🎎 组合服务（${staffList.length}项）`;
+  } else if (staffList.length === 1) {
+    serviceLevel = `📌 单项服务：${staffList[0].typeIcon} ${staffList[0].type}`;
+  } else {
+    serviceLevel = '（待选择服务人员）';
+  }
+
   return {
     contractNo: formData.contractNo || generateContractNo(),
     customerName: formData.customerName || '____________',
     customerPhone: formData.customerPhone || '____________',
     weddingDate: formData.weddingDate || '____________',
+    remark: formData.remark || '',
+    serviceLevel: serviceLevel,
+    isFullPackage: staffList.length === 4,
     staffList: staffList,
     totalPrice: totalPrice,
     totalPriceCN: numberToChinese(totalPrice),
@@ -68,11 +82,35 @@ function renderContractHTML(data) {
       </tr>`;
   });
 
+  if (data.staffList.length === 0) {
+    staffRows = `
+      <tr>
+        <td colspan="5" style="padding:30px;border:1px solid #D4A574;text-align:center;color:#A0896C;">请从左侧选择服务人员...</td>
+      </tr>
+    `;
+  }
+
+  const packageBadge = data.isFullPackage
+    ? `<div style="display:inline-block;padding:6px 18px;border-radius:20px;background:linear-gradient(135deg,#D4A574,#E8C4A0);color:white;font-size:12px;letter-spacing:1px;margin-top:8px;">💎 四大金刚尊享套餐 · 全套服务</div>`
+    : data.staffList.length === 1
+      ? `<div style="display:inline-block;padding:6px 18px;border-radius:20px;background:rgba(212,165,116,0.15);color:#B8956A;font-size:12px;letter-spacing:1px;margin-top:8px;">📌 单项服务 · 按需选配</div>`
+      : data.staffList.length > 1
+        ? `<div style="display:inline-block;padding:6px 18px;border-radius:20px;background:rgba(212,165,116,0.15);color:#B8956A;font-size:12px;letter-spacing:1px;margin-top:8px;">🎎 组合服务 · ${data.staffList.length}项选配</div>`
+        : '';
+
+  const remarkSection = data.remark
+    ? `<div style="margin-bottom:24px;padding:16px 20px;background:#FAF5EA;border-radius:8px;border-left:4px solid #D4A574;">
+        <div style="font-size:13px;font-weight:600;color:#6B4423;margin-bottom:6px;">📝 订单备注 / 特殊要求：</div>
+        <div style="font-size:13px;color:#3D2914;line-height:1.7;white-space:pre-wrap;">${data.remark}</div>
+      </div>`
+    : '';
+
   return `
     <div style="text-align:center;margin-bottom:32px;">
       <div style="font-size:14px;letter-spacing:6px;color:#B8956A;margin-bottom:8px;">❦ 良缘阁婚庆策划 ❦</div>
       <h1 style="font-family:'Playfair Display',serif;font-size:36px;color:#3D2914;letter-spacing:8px;margin:0 0 4px 0;">婚庆服务合同</h1>
       <div style="font-size:13px;color:#A0896C;letter-spacing:2px;">WEDDING SERVICE CONTRACT</div>
+      ${packageBadge}
       <div style="margin-top:12px;font-size:13px;color:#6B4423;">合同编号：<span style="font-weight:600;color:#B8956A;letter-spacing:1px;">${data.contractNo}</span></div>
     </div>
 
@@ -81,9 +119,12 @@ function renderContractHTML(data) {
         <div><span style="color:#6B4423;">甲方（客户）：</span><span style="font-weight:600;">${data.customerName}</span></div>
         <div><span style="color:#6B4423;">联系电话：</span><span style="font-weight:600;">${data.customerPhone}</span></div>
         <div style="grid-column:1/-1;"><span style="color:#6B4423;">婚礼日期：</span><span style="font-weight:600;">${data.weddingDate}</span></div>
+        <div style="grid-column:1/-1;"><span style="color:#6B4423;">服务类型：</span><span style="font-weight:600;">${data.serviceLevel}</span></div>
         <div style="grid-column:1/-1;"><span style="color:#6B4423;">乙方（服务方）：</span><span style="font-weight:600;">良缘阁婚庆策划有限公司</span></div>
       </div>
     </div>
+
+    ${remarkSection}
 
     <div style="margin-bottom:24px;">
       <h3 style="font-family:'Playfair Display',serif;font-size:18px;color:#3D2914;margin:0 0 14px 0;padding-bottom:8px;border-bottom:2px solid #D4A574;">一、服务人员清单</h3>
@@ -99,6 +140,7 @@ function renderContractHTML(data) {
         </thead>
         <tbody>
           ${staffRows}
+          ${data.staffList.length > 0 ? `
           <tr>
             <td colspan="4" style="padding:14px;border:1px solid #D4A574;text-align:right;font-weight:600;background:#FFF8F0;">合计金额（大写）</td>
             <td style="padding:14px;border:1px solid #D4A574;text-align:right;background:#FFF8F0;font-weight:600;">${data.totalPriceCN}</td>
@@ -106,7 +148,7 @@ function renderContractHTML(data) {
           <tr>
             <td colspan="4" style="padding:14px;border:1px solid #D4A574;text-align:right;font-weight:600;background:#FFF8F0;">合计金额（小写）</td>
             <td style="padding:14px;border:1px solid #D4A574;text-align:right;background:#FFF8F0;font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:#B8956A;">${formatCurrency(data.totalPrice)}</td>
-          </tr>
+          </tr>` : ''}
         </tbody>
       </table>
     </div>
@@ -119,6 +161,7 @@ function renderContractHTML(data) {
         <p style="margin:0 0 8px 0;">3. 如因甲方原因取消服务，定金不予退还；如因乙方原因无法提供服务，应双倍返还定金。</p>
         <p style="margin:0 0 8px 0;">4. 服务人员如需临时更换，乙方需提前 7 日通知甲方，并提供同等或更高星级人员。</p>
         <p style="margin:0 0 8px 0;">5. 本合同一式两份，甲乙双方各执一份，自双方签字之日起生效。</p>
+        ${data.remark ? '<p style="margin:0 0 8px 0;">6. 其他特殊约定：详见本合同"订单备注"栏目。</p>' : ''}
       </div>
     </div>
 

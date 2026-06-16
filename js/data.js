@@ -126,6 +126,14 @@ function initMockData() {
   }
   staffCache = null;
   bookingsCache = null;
+  try {
+    const rawStaff = localStorage.getItem(STORAGE_KEYS.STAFF);
+    staffCache = rawStaff ? JSON.parse(rawStaff) : [];
+    const rawBookings = localStorage.getItem(STORAGE_KEYS.BOOKINGS);
+    bookingsCache = rawBookings ? JSON.parse(rawBookings) : [];
+  } catch (e) {
+    console.warn('[initMockData] 缓存预热失败，将延迟加载:', e);
+  }
 }
 
 function getStaffList() {
@@ -147,11 +155,13 @@ function saveStaffList(list) {
 }
 
 function getStaffById(id) {
-  return getStaffList().find(s => s.id === id);
+  const list = getStaffList() || [];
+  return list.find(s => s.id === id);
 }
 
 function getStaffByType(type) {
-  return getStaffList().filter(s => s.type === type);
+  const list = getStaffList() || [];
+  return list.filter(s => s.type === type);
 }
 
 function updateStaffBookedDates(staffId, date, add = true) {
@@ -197,6 +207,7 @@ function addBooking(booking) {
   const list = getBookings();
   booking.id = 'BK' + Date.now();
   booking.createdAt = new Date().toISOString();
+  if (!booking.remark) booking.remark = '';
   list.push(booking);
   saveBookings(list);
   if (booking.emceeId) updateStaffBookedDates(booking.emceeId, booking.date, true);
@@ -220,7 +231,7 @@ function deleteBooking(bookingId) {
   return true;
 }
 
-function addSingleBooking(type, staffId, date, customerName, customerPhone) {
+function addSingleBooking(type, staffId, date, customerName, customerPhone, remark) {
   const staff = getStaffById(staffId);
   if (!staff) return { success: false, message: '人员不存在' };
   if (staff.bookedDates.includes(date)) {
@@ -232,6 +243,7 @@ function addSingleBooking(type, staffId, date, customerName, customerPhone) {
     date: date,
     customerName: customerName || '',
     customerPhone: customerPhone || '',
+    remark: remark || '',
     emceeId: type === STAFF_TYPES.EMCEE ? staffId : null,
     photographerId: type === STAFF_TYPES.PHOTOGRAPHER ? staffId : null,
     cameramanId: type === STAFF_TYPES.CAMERAMAN ? staffId : null,

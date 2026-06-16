@@ -39,6 +39,8 @@ function generateAllCombos(date) {
 }
 
 function sortCombosByBudget(combos, budgetTarget, budgetMin, budgetMax) {
+  const hasRange = (budgetMin > 0 || (budgetMax && isFinite(budgetMax)));
+
   const filtered = combos.filter(c =>
     c.totalPrice >= (budgetMin || 0) &&
     c.totalPrice <= (budgetMax || Infinity)
@@ -51,15 +53,6 @@ function sortCombosByBudget(combos, budgetTarget, budgetMin, budgetMax) {
 
   withDiff.sort((a, b) => a.budgetDiff - b.budgetDiff);
 
-  if (withDiff.length === 0) {
-    const allWithDiff = combos.map(c => ({
-      ...c,
-      budgetDiff: Math.abs(c.totalPrice - budgetTarget)
-    }));
-    allWithDiff.sort((a, b) => a.budgetDiff - b.budgetDiff);
-    return allWithDiff.slice(0, 20);
-  }
-
   return withDiff.slice(0, 20);
 }
 
@@ -71,7 +64,7 @@ function getBudgetMatchClass(totalPrice, budgetTarget) {
   return { class: 'over', text: diff > 0 ? `超出预算 ${formatCurrency(diff)}` : `低于预算 ${formatCurrency(Math.abs(diff))}`};
 }
 
-function getReplaceCandidates(currentCombo, replaceType, budgetTarget, date) {
+function getReplaceCandidates(currentCombo, replaceType, budgetTarget, date, budgetMin, budgetMax) {
   const current = currentCombo[replaceType];
   const available = findAvailableStaff(date, replaceType).filter(s => s.id !== current.id);
 
@@ -83,9 +76,14 @@ function getReplaceCandidates(currentCombo, replaceType, budgetTarget, date) {
       staff: s,
       newTotalPrice: newTotal,
       priceDiff: s.price - current.price,
-      budgetDiff: Math.abs(newTotal - budgetTarget)
+      budgetDiff: Math.abs(newTotal - budgetTarget),
+      withinBudget: newTotal >= (budgetMin || 0) && newTotal <= (budgetMax || Infinity)
     };
-  }).sort((a, b) => a.budgetDiff - b.budgetDiff);
+  })
+  .sort((a, b) => {
+    if (a.withinBudget !== b.withinBudget) return a.withinBudget ? -1 : 1;
+    return a.budgetDiff - b.budgetDiff;
+  });
 }
 
 function getMissingTypesText(missing) {

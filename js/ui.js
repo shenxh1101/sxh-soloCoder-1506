@@ -85,32 +85,49 @@ function renderRecommendResults(combo, budgetTarget) {
   matchEl.textContent = match.text;
 }
 
-function renderReplaceModal(candidates, currentStaff, budgetTarget) {
+function renderReplaceModal(candidates, currentStaff, budgetTarget, budgetMin, budgetMax) {
   const typeInfo = TYPE_LABELS[currentStaff.type];
+  const budgetRangeText = budgetMin > 0 || (budgetMax && isFinite(budgetMax))
+    ? ` · 预算范围 ${formatCurrency(budgetMin || 0)}-${formatCurrency(budgetMax || 99999999)}`
+    : '';
 
+  let inBudgetCount = 0, outBudgetCount = 0;
   let cardsHTML = candidates.map(c => {
     const diffText = c.priceDiff > 0
       ? `<span class="replace-price-diff up">+${formatCurrency(c.priceDiff)}</span>`
       : c.priceDiff < 0
         ? `<span class="replace-price-diff down">${formatCurrency(c.priceDiff)}</span>`
         : `<span class="replace-price-diff">价格相同</span>`;
+
+    const budgetTag = c.withinBudget
+      ? (inBudgetCount++, '<div style="margin-top:6px;"><span style="font-size:11px;background:rgba(45,106,79,0.12);color:#2D6A4F;padding:2px 10px;border-radius:10px;">✅ 在预算范围内</span></div>')
+      : (outBudgetCount++, '<div style="margin-top:6px;"><span style="font-size:11px;background:rgba(201,24,74,0.1);color:#C9184A;padding:2px 10px;border-radius:10px;">⚠️ 超出预算范围</span></div>');
+
+    const cardStyle = !c.withinBudget ? 'opacity:0.62;background:rgba(253,245,230,0.5);' : '';
+
     return `
-      <div class="replace-card" data-staff-id="${c.staff.id}" data-price-diff="${c.priceDiff}">
+      <div class="replace-card" data-staff-id="${c.staff.id}" data-price-diff="${c.priceDiff}" style="${cardStyle}">
         <div class="replace-avatar">${c.staff.avatar}</div>
         <div class="replace-name">${c.staff.name}</div>
         <div class="replace-stars">${renderStarsHTML(c.staff.stars)}</div>
         <div class="replace-price">${formatCurrency(c.staff.price)}</div>
         ${diffText}
+        ${budgetTag}
       </div>
     `;
   }).join('');
 
+  const summaryTip = budgetMin > 0 || (budgetMax && isFinite(budgetMax))
+    ? `<div style="font-size:12px;color:#A0896C;margin-bottom:12px;">💡 绿色标记为换人后仍在预算范围内的人员（共${inBudgetCount}个），红色标记为超出预算（共${outBudgetCount}个）</div>`
+    : '';
+
   const html = `
     <div class="modal-header">
       <h3 class="modal-title">更换${typeInfo.icon} ${typeInfo.label}</h3>
-      <p class="modal-subtitle">当前选择：${currentStaff.name} · ${formatCurrency(currentStaff.price)} — 请从以下可选人员中选择</p>
+      <p class="modal-subtitle">当前选择：${currentStaff.name} · ${formatCurrency(currentStaff.price)}${budgetRangeText}</p>
     </div>
     <div class="modal-body">
+      ${summaryTip}
       ${candidates.length > 0
         ? `<div class="replace-list">${cardsHTML}</div>`
         : `<p class="empty-text">暂无其他可选人员</p>`}
@@ -220,8 +237,32 @@ function populateContractStaffSelects() {
 }
 
 function populateContractBookingSelect() {
-  const bookings = getBookings().filter(b => !b.singleType).slice().reverse();
+  const bookings = getBookings().slice().reverse();
   const select = document.getElementById('contract-booking');
   select.innerHTML = '<option value="">— 手动选择人员 —</option>' +
-    bookings.map(b => `<option value="${b.id}" data-date="${b.date}" data-emcee="${b.emceeId || ''}" data-photographer="${b.photographerId || ''}" data-cameraman="${b.cameramanId || ''}" data-makeup="${b.makeupId || ''}" data-customer="${b.customerName || ''}" data-phone="${b.customerPhone || ''}">${b.date} · ${b.customerName || '未命名'}</option>`).join('');
+    bookings.map(b => {
+      let typeLabel = '🎎 四大金刚整套';
+      if (b.singleType) {
+        typeLabel = TYPE_LABELS[b.singleType].icon + ' ' + TYPE_LABELS[b.singleType].label + '（单项）';
+      } else {
+        let staffCount = 0;
+        if (b.emceeId) staffCount++;
+        if (b.photographerId) staffCount++;
+        if (b.cameramanId) staffCount++;
+        if (b.makeupId) staffCount++;
+        if (staffCount < 4) typeLabel = `🎎 组合服务（${staffCount}项）`;
+      }
+      const customerText = b.customerName || '未命名客户';
+      return `<option value="${b.id}" 
+        data-date="${b.date}" 
+        data-emcee="${b.emceeId || ''}" 
+        data-photographer="${b.photographerId || ''}" 
+        data-cameraman="${b.cameramanId || ''}" 
+        data-makeup="${b.makeupId || ''}" 
+        data-customer="${b.customerName || ''}" 
+        data-phone="${b.customerPhone || ''}"
+        data-remark="${(b.remark || '').replace(/"/g, '&quot;')}"
+        data-istype="${b.singleType || ''}"
+      >${b.date} · ${typeLabel} · ${customerText} · ${formatCurrency(b.totalPrice)}</option>`;
+    }).join('');
 }
