@@ -160,10 +160,17 @@ document.addEventListener('DOMContentLoaded', function() {
           showToast('预订已取消，档期已释放', 'success');
           renderBookingList();
           populateBookingStaffSelect(document.getElementById('booking-type').value);
+          populateContractBookingSelect();
         } else {
           showToast('取消失败', 'error');
         }
       }
+      return;
+    }
+
+    const editBtn = e.target.closest('[data-edit]');
+    if (editBtn) {
+      openEditBookingModal(editBtn.dataset.edit);
     }
   });
 
@@ -183,20 +190,51 @@ document.addEventListener('DOMContentLoaded', function() {
 
   document.getElementById('contract-booking').addEventListener('change', function() {
     const opt = this.options[this.selectedIndex];
+    
+    ['contract-emcee', 'contract-photographer', 'contract-cameraman', 'contract-makeup'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+
     if (opt && opt.value) {
+      const isType = opt.dataset.istype;
+      const contractNo = opt.dataset.contractno || '';
+
       if (opt.dataset.date) document.getElementById('contract-date').value = opt.dataset.date;
       if (opt.dataset.customer) document.getElementById('contract-customer').value = opt.dataset.customer;
       if (opt.dataset.phone) document.getElementById('contract-phone').value = opt.dataset.phone;
       if (opt.dataset.remark && document.getElementById('contract-remark')) {
         document.getElementById('contract-remark').value = opt.dataset.remark;
       }
-      if (opt.dataset.emcee) document.getElementById('contract-emcee').value = opt.dataset.emcee;
-      if (opt.dataset.photographer) document.getElementById('contract-photographer').value = opt.dataset.photographer;
-      if (opt.dataset.cameraman) document.getElementById('contract-cameraman').value = opt.dataset.cameraman;
-      if (opt.dataset.makeup) document.getElementById('contract-makeup').value = opt.dataset.makeup;
-      updateContractTotal();
-      renderContractPreviewFromForm();
+
+      if (isType) {
+        if (isType === 'emcee' && opt.dataset.emcee) document.getElementById('contract-emcee').value = opt.dataset.emcee;
+        if (isType === 'photographer' && opt.dataset.photographer) document.getElementById('contract-photographer').value = opt.dataset.photographer;
+        if (isType === 'cameraman' && opt.dataset.cameraman) document.getElementById('contract-cameraman').value = opt.dataset.cameraman;
+        if (isType === 'makeup' && opt.dataset.makeup) document.getElementById('contract-makeup').value = opt.dataset.makeup;
+      } else {
+        if (opt.dataset.emcee) document.getElementById('contract-emcee').value = opt.dataset.emcee;
+        if (opt.dataset.photographer) document.getElementById('contract-photographer').value = opt.dataset.photographer;
+        if (opt.dataset.cameraman) document.getElementById('contract-cameraman').value = opt.dataset.cameraman;
+        if (opt.dataset.makeup) document.getElementById('contract-makeup').value = opt.dataset.makeup;
+      }
+
+      if (contractNo) {
+        document.getElementById('contract-no').value = contractNo;
+      } else {
+        document.getElementById('contract-no').value = generateContractNo();
+      }
+    } else {
+      document.getElementById('contract-no').value = generateContractNo();
+      document.getElementById('contract-date').value = '';
+      document.getElementById('contract-customer').value = '';
+      document.getElementById('contract-phone').value = '';
+      if (document.getElementById('contract-remark')) {
+        document.getElementById('contract-remark').value = '';
+      }
     }
+    
+    updateContractTotal();
+    renderContractPreviewFromForm();
   });
 
   document.getElementById('btn-preview-contract').addEventListener('click', function() {
@@ -402,10 +440,10 @@ function applyReplacement(type, newStaffId) {
   const othersTotal = combo.totalPrice - oldStaff.price;
   const newTotal = othersTotal + newStaff.price;
 
-  if (newTotal < currentBudgetMin || newTotal > currentBudgetMax) {
-    if (!confirm(`换人后新组合总价为 ${formatCurrency(newTotal)}，超出您设定的预算范围 ${formatCurrency(currentBudgetMin)} - ${formatCurrency(currentBudgetMax)}。\n\n是否仍要继续？`)) {
-      return;
-    }
+  const hasBudgetLimit = currentBudgetMin > 0 || (currentBudgetMax && isFinite(currentBudgetMax) && currentBudgetMax < 99999999);
+  if (hasBudgetLimit && (newTotal < currentBudgetMin || newTotal > currentBudgetMax)) {
+    showToast(`⚠️ 该人员替换后总价 ${formatCurrency(newTotal)} 超出预算范围 ${formatCurrency(currentBudgetMin)}-${formatCurrency(currentBudgetMax)}\n\n如需超预算，请先点击「清除预算限制」或重新调整预算后再匹配`, 'error', 5000);
+    return;
   }
 
   const newCombo = {
@@ -512,11 +550,14 @@ function handleConfirmBooking() {
           return;
         }
 
+        const contractNo = generateContractNo();
+
         const booking = addBooking({
           date: currentWeddingDate,
           customerName: customerName,
           customerPhone: customerPhone,
           remark: remark,
+          contractNo: contractNo,
           emceeId: emcee.id,
           photographerId: photographer.id,
           cameramanId: cameraman.id,
@@ -539,10 +580,19 @@ function handleConfirmBooking() {
           document.getElementById('contract-photographer').value = photographer.id;
           document.getElementById('contract-cameraman').value = cameraman.id;
           document.getElementById('contract-makeup').value = makeup.id;
-          document.getElementById('contract-no').value = generateContractNo();
+          document.getElementById('contract-no').value = contractNo;
           updateContractTotal();
           renderContractPreviewFromForm();
           populateContractBookingSelect();
+          setTimeout(() => {
+            const sel = document.getElementById('contract-booking');
+            for (let i = 0; i < sel.options.length; i++) {
+              if (sel.options[i].value === booking.id) {
+                sel.selectedIndex = i;
+                break;
+              }
+            }
+          }, 100);
         }, 600);
       });
     }
@@ -603,7 +653,8 @@ function handleManualBooking() {
     return;
   }
 
-  const result = addSingleBooking(type, staffId, date, customerName, customerPhone, remark);
+  const contractNo = generateContractNo();
+  const result = addSingleBooking(type, staffId, date, customerName, customerPhone, remark, contractNo);
   if (result.success) {
     showToast('预订保存成功！', 'success');
     document.getElementById('booking-customer').value = '';
@@ -619,4 +670,186 @@ function handleManualBooking() {
   } else {
     showToast(result.message, 'error');
   }
+}
+
+function openEditBookingModal(bookingId) {
+  const booking = getBookingById(bookingId);
+  if (!booking) {
+    showToast('预订记录不存在', 'error');
+    return;
+  }
+
+  let staffInfoHTML = '';
+  let staffLabel = '';
+  if (booking.singleType) {
+    const staff = getStaffById(booking.emceeId || booking.photographerId || booking.cameramanId || booking.makeupId);
+    const typeInfo = TYPE_LABELS[booking.singleType];
+    staffLabel = typeInfo.icon + ' ' + typeInfo.label + '（单项）';
+    if (staff) {
+      staffInfoHTML = `<div style="background:#FFF8F0;border-radius:12px;padding:16px 20px;margin-bottom:20px;border:1px solid #E8C4A0;">
+        <div style="font-size:12px;color:#A0896C;letter-spacing:1px;margin-bottom:8px;">📋 当前预订 · ${staffLabel}</div>
+        <div style="font-size:15px;color:#3D2914;font-weight:600;">${staff.avatar} ${staff.name} · ${formatCurrency(staff.price)} · ⭐${'★'.repeat(staff.stars)}${'☆'.repeat(5 - staff.stars)}</div>
+      </div>`;
+    }
+  } else {
+    const names = [];
+    if (booking.emceeId) { const s = getStaffById(booking.emceeId); if (s) names.push('🎤 ' + s.name); }
+    if (booking.photographerId) { const s = getStaffById(booking.photographerId); if (s) names.push('📷 ' + s.name); }
+    if (booking.cameramanId) { const s = getStaffById(booking.cameramanId); if (s) names.push('🎥 ' + s.name); }
+    if (booking.makeupId) { const s = getStaffById(booking.makeupId); if (s) names.push('💄 ' + s.name); }
+    staffLabel = '🎎 四大金刚整套';
+    staffInfoHTML = `<div style="background:#FFF8F0;border-radius:12px;padding:16px 20px;margin-bottom:20px;border:1px solid #E8C4A0;">
+      <div style="font-size:12px;color:#A0896C;letter-spacing:1px;margin-bottom:8px;">📋 当前预订 · ${staffLabel} · 总价 ${formatCurrency(booking.totalPrice)}</div>
+      <div style="font-size:13px;color:#3D2914;line-height:2;">${names.join('　')}</div>
+    </div>`;
+  }
+
+  const contractBadge = booking.contractNo
+    ? `<div style="margin-bottom:12px;padding:10px 14px;background:rgba(212,165,116,0.1);border-radius:8px;font-size:12px;color:#B8956A;">📄 关联合同：<strong style="color:#6B4423;">${booking.contractNo}</strong>（修改后合同页打开将自动读取最新信息）</div>`
+    : `<div style="margin-bottom:12px;padding:10px 14px;background:rgba(201,24,74,0.05);border-radius:8px;font-size:12px;color:#A0896C;">⚠️ 尚未生成正式合同编号</div>`;
+
+  const html = `
+    <div class="modal-header">
+      <h3 class="modal-title">✏️ 编辑预订记录</h3>
+      <p class="modal-subtitle">修改客户信息和备注，调整日期时会自动检查档期冲突</p>
+    </div>
+    <div class="modal-body" style="padding:20px 28px;">
+      ${staffInfoHTML}
+      ${contractBadge}
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">客户姓名</label>
+            <input type="text" id="edit-customer" class="form-input" placeholder="请输入客户姓名" style="width:100%;" value="${booking.customerName || ''}">
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">联系电话</label>
+            <input type="tel" id="edit-phone" class="form-input" placeholder="请输入联系电话" style="width:100%;" value="${booking.customerPhone || ''}">
+          </div>
+        </div>
+        <div>
+          <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">婚礼日期 <span style="color:#C9184A;">*</span></label>
+          <input type="date" id="edit-date" class="form-input" style="width:100%;" value="${booking.date}" min="${getToday()}">
+        </div>
+        <div>
+          <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">订单备注</label>
+          <textarea id="edit-remark" class="form-input" rows="3" placeholder="可选：婚礼地点、特殊要求、对接说明等..." style="width:100%;resize:vertical;font-family:'Noto Serif SC',serif;">${booking.remark || ''}</textarea>
+        </div>
+        <div id="edit-warning" class="conflict-warning hidden" style="margin-top:4px;">
+          <span id="edit-warning-text"></span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="modal-cancel">取消</button>
+      <button class="btn btn-primary" id="modal-save-edit">
+        <span class="btn-icon">✓</span> 保存修改
+      </button>
+    </div>
+  `;
+
+  showModal(html);
+
+  setTimeout(() => {
+    const dateInput = document.getElementById('edit-date');
+    if (dateInput) {
+      dateInput.addEventListener('change', function() {
+        const warning = document.getElementById('edit-warning');
+        const warningText = document.getElementById('edit-warning-text');
+        const saveBtn = document.getElementById('modal-save-edit');
+        const newDate = this.value;
+
+        if (newDate < getToday()) {
+          warning.classList.remove('hidden');
+          warningText.textContent = '⚠️ 预订日期不能早于今天';
+          if (saveBtn) saveBtn.disabled = true;
+          return;
+        }
+
+        if (newDate === booking.date) {
+          warning.classList.add('hidden');
+          if (saveBtn) saveBtn.disabled = false;
+          return;
+        }
+
+        const staffIds = [];
+        if (booking.emceeId) staffIds.push(booking.emceeId);
+        if (booking.photographerId) staffIds.push(booking.photographerId);
+        if (booking.cameramanId) staffIds.push(booking.cameramanId);
+        if (booking.makeupId) staffIds.push(booking.makeupId);
+
+        let hasConflict = false;
+        let conflictMsg = '';
+        for (const sid of staffIds) {
+          const conflict = checkStaffConflict(sid, newDate);
+          if (conflict.hasConflict) {
+            hasConflict = true;
+            conflictMsg = conflict.conflictInfo;
+            break;
+          }
+        }
+
+        if (hasConflict) {
+          warning.classList.remove('hidden');
+          warningText.textContent = conflictMsg;
+          if (saveBtn) saveBtn.disabled = true;
+        } else {
+          warning.classList.add('hidden');
+          if (saveBtn) saveBtn.disabled = false;
+        }
+      });
+    }
+
+    const saveBtn = document.getElementById('modal-save-edit');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', function() {
+        const customerName = document.getElementById('edit-customer').value.trim();
+        const customerPhone = document.getElementById('edit-phone').value.trim();
+        const date = document.getElementById('edit-date').value;
+        const remark = document.getElementById('edit-remark').value.trim();
+
+        if (!date) {
+          showToast('请选择婚礼日期', 'error');
+          return;
+        }
+        if (date < getToday()) {
+          showToast('预订日期不能早于今天', 'error');
+          return;
+        }
+
+        if (date !== booking.date) {
+          const staffIds = [];
+          if (booking.emceeId) staffIds.push(booking.emceeId);
+          if (booking.photographerId) staffIds.push(booking.photographerId);
+          if (booking.cameramanId) staffIds.push(booking.cameramanId);
+          if (booking.makeupId) staffIds.push(booking.makeupId);
+
+          for (const sid of staffIds) {
+            const conflict = checkStaffConflict(sid, date);
+            if (conflict.hasConflict) {
+              showToast(conflict.conflictInfo, 'error');
+              return;
+            }
+          }
+        }
+
+        const result = updateBooking(bookingId, {
+          customerName: customerName,
+          customerPhone: customerPhone,
+          date: date,
+          remark: remark
+        });
+
+        if (result.success) {
+          hideModal();
+          showToast('预订记录已更新！合同页将读取最新信息', 'success');
+          renderStaffList(document.querySelector('.staff-tab.active').dataset.type);
+          renderBookingList();
+          populateContractBookingSelect();
+        } else {
+          showToast(result.message, 'error');
+        }
+      });
+    }
+  }, 50);
 }

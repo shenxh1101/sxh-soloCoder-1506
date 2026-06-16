@@ -198,15 +198,23 @@ function renderBookingList() {
       if (b.makeupId) { const s = getStaffById(b.makeupId); if (s) names.push(s.name); }
       staffName = names.join('、');
     }
+
+    const contractBadge = b.contractNo
+      ? `<span style="display:inline-block;font-size:10px;background:rgba(212,165,116,0.15);color:#B8956A;padding:2px 8px;border-radius:10px;margin-left:8px;">📄 ${b.contractNo}</span>`
+      : '';
+
     html += `
       <div class="booking-item" data-booking-id="${b.id}">
         <div class="booking-type-icon">${typeIcon}</div>
         <div class="booking-info">
-          <div class="booking-info-main">${staffName}</div>
-          <div class="booking-info-sub">客户：${b.customerName || '未填写'} ${b.customerPhone ? '· ' + b.customerPhone : ''}</div>
+          <div class="booking-info-main">${staffName}${contractBadge}</div>
+          <div class="booking-info-sub">客户：${b.customerName || '未填写'} ${b.customerPhone ? '· ' + b.customerPhone : ''}${b.remark ? ' · 💬 ' + b.remark.substring(0, 20) + (b.remark.length > 20 ? '...' : '') : ''}</div>
         </div>
         <div class="booking-date">${b.date}</div>
-        <button class="booking-del-btn" data-del="${b.id}">取消</button>
+        <div style="display:flex;gap:6px;">
+          <button class="booking-del-btn" data-edit="${b.id}" style="background:rgba(45,106,79,0.1);color:#2D6A4F;border:none;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(45,106,79,0.2)'" onmouseout="this.style.background='rgba(45,106,79,0.1)'">✏️ 编辑</button>
+          <button class="booking-del-btn" data-del="${b.id}">取消</button>
+        </div>
       </div>
     `;
   });
@@ -253,6 +261,7 @@ function populateContractBookingSelect() {
         if (staffCount < 4) typeLabel = `🎎 组合服务（${staffCount}项）`;
       }
       const customerText = b.customerName || '未命名客户';
+      const contractBadge = b.contractNo ? ` [${b.contractNo}]` : '';
       return `<option value="${b.id}" 
         data-date="${b.date}" 
         data-emcee="${b.emceeId || ''}" 
@@ -263,6 +272,7 @@ function populateContractBookingSelect() {
         data-phone="${b.customerPhone || ''}"
         data-remark="${(b.remark || '').replace(/"/g, '&quot;')}"
         data-istype="${b.singleType || ''}"
-      >${b.date} · ${typeLabel} · ${customerText} · ${formatCurrency(b.totalPrice)}</option>`;
+        data-contractno="${b.contractNo || ''}"
+      >${b.date} · ${typeLabel} · ${customerText}${contractBadge} · ${formatCurrency(b.totalPrice)}</option>`;
     }).join('');
 }

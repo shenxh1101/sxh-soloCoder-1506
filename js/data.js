@@ -198,6 +198,10 @@ function getBookings() {
   return bookingsCache;
 }
 
+function getBookingById(id) {
+  return getBookings().find(b => b.id === id) || null;
+}
+
 function saveBookings(list) {
   bookingsCache = list;
   localStorage.setItem(STORAGE_KEYS.BOOKINGS, JSON.stringify(list));
@@ -208,6 +212,7 @@ function addBooking(booking) {
   booking.id = 'BK' + Date.now();
   booking.createdAt = new Date().toISOString();
   if (!booking.remark) booking.remark = '';
+  if (!booking.contractNo) booking.contractNo = '';
   list.push(booking);
   saveBookings(list);
   if (booking.emceeId) updateStaffBookedDates(booking.emceeId, booking.date, true);
@@ -231,7 +236,56 @@ function deleteBooking(bookingId) {
   return true;
 }
 
-function addSingleBooking(type, staffId, date, customerName, customerPhone, remark) {
+function updateBooking(bookingId, updates) {
+  const list = getBookings();
+  const idx = list.findIndex(b => b.id === bookingId);
+  if (idx === -1) return { success: false, message: '预订记录不存在' };
+
+  const oldBooking = { ...list[idx] };
+  const newBooking = { ...oldBooking, ...updates };
+
+  if (updates.date && updates.date !== oldBooking.date) {
+    const staffIds = [];
+    if (oldBooking.emceeId) staffIds.push(oldBooking.emceeId);
+    if (oldBooking.photographerId) staffIds.push(oldBooking.photographerId);
+    if (oldBooking.cameramanId) staffIds.push(oldBooking.cameramanId);
+    if (oldBooking.makeupId) staffIds.push(oldBooking.makeupId);
+
+    for (const sid of staffIds) {
+      const conflict = checkStaffConflict(sid, updates.date);
+      if (conflict.hasConflict) {
+        const staff = getStaffById(sid);
+        return { 
+          success: false, 
+          message: `${staff ? staff.name : '该人员'} 在 ${updates.date} 已有预订，无法修改日期` 
+        };
+      }
+    }
+
+    if (oldBooking.emceeId) {
+      updateStaffBookedDates(oldBooking.emceeId, oldBooking.date, false);
+      updateStaffBookedDates(oldBooking.emceeId, updates.date, true);
+    }
+    if (oldBooking.photographerId) {
+      updateStaffBookedDates(oldBooking.photographerId, oldBooking.date, false);
+      updateStaffBookedDates(oldBooking.photographerId, updates.date, true);
+    }
+    if (oldBooking.cameramanId) {
+      updateStaffBookedDates(oldBooking.cameramanId, oldBooking.date, false);
+      updateStaffBookedDates(oldBooking.cameramanId, updates.date, true);
+    }
+    if (oldBooking.makeupId) {
+      updateStaffBookedDates(oldBooking.makeupId, oldBooking.date, false);
+      updateStaffBookedDates(oldBooking.makeupId, updates.date, true);
+    }
+  }
+
+  list[idx] = newBooking;
+  saveBookings(list);
+  return { success: true, booking: newBooking };
+}
+
+function addSingleBooking(type, staffId, date, customerName, customerPhone, remark, contractNo) {
   const staff = getStaffById(staffId);
   if (!staff) return { success: false, message: '人员不存在' };
   if (staff.bookedDates.includes(date)) {
@@ -244,6 +298,7 @@ function addSingleBooking(type, staffId, date, customerName, customerPhone, rema
     customerName: customerName || '',
     customerPhone: customerPhone || '',
     remark: remark || '',
+    contractNo: contractNo || '',
     emceeId: type === STAFF_TYPES.EMCEE ? staffId : null,
     photographerId: type === STAFF_TYPES.PHOTOGRAPHER ? staffId : null,
     cameramanId: type === STAFF_TYPES.CAMERAMAN ? staffId : null,
