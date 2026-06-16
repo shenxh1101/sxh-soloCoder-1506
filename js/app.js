@@ -48,6 +48,11 @@ function updateContractTotal() {
 }
 
 function renderContractPreviewFromForm() {
+  const depositRaw = document.getElementById('contract-deposit').value;
+  const depositAmount = (depositRaw === '' || depositRaw === null || depositRaw === undefined)
+    ? null : parseFloat(depositRaw);
+  const bookingSelect = document.getElementById('contract-booking');
+  const bookingId = bookingSelect ? bookingSelect.value : '';
   const formData = {
     contractNo: document.getElementById('contract-no').value,
     customerName: document.getElementById('contract-customer').value,
@@ -55,7 +60,7 @@ function renderContractPreviewFromForm() {
     weddingDate: document.getElementById('contract-date').value,
     weddingVenue: document.getElementById('contract-venue').value,
     salesPerson: document.getElementById('contract-sales').value,
-    depositAmount: parseFloat(document.getElementById('contract-deposit').value) || 0,
+    depositAmount: depositAmount,
     balanceStatus: document.getElementById('contract-balance').value,
     emceeId: document.getElementById('contract-emcee').value || null,
     photographerId: document.getElementById('contract-photographer').value || null,
@@ -63,7 +68,7 @@ function renderContractPreviewFromForm() {
     makeupId: document.getElementById('contract-makeup').value || null,
     remark: document.getElementById('contract-remark') ? document.getElementById('contract-remark').value : ''
   };
-  const data = buildContractData(formData);
+  const data = buildContractData(formData, bookingId || null);
   document.getElementById('contract-preview').innerHTML = renderContractPreview(data);
 }
 
@@ -71,12 +76,15 @@ function syncContractToBooking() {
   const bookingSelect = document.getElementById('contract-booking');
   const bookingId = bookingSelect.value;
   if (!bookingId) return;
+  const depositRaw = document.getElementById('contract-deposit').value;
+  const depositAmount = (depositRaw === '' || depositRaw === null || depositRaw === undefined)
+    ? null : parseFloat(depositRaw);
   const updates = {
     customerName: document.getElementById('contract-customer').value,
     customerPhone: document.getElementById('contract-phone').value,
     weddingVenue: document.getElementById('contract-venue').value,
     salesPerson: document.getElementById('contract-sales').value,
-    depositAmount: parseFloat(document.getElementById('contract-deposit').value) || 0,
+    depositAmount: depositAmount,
     balanceStatus: document.getElementById('contract-balance').value,
     remark: document.getElementById('contract-remark') ? document.getElementById('contract-remark').value : ''
   };
@@ -240,7 +248,7 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('contract-phone').value = opt.dataset.phone || '';
       document.getElementById('contract-venue').value = opt.dataset.venue || '';
       document.getElementById('contract-sales').value = opt.dataset.sales || '';
-      document.getElementById('contract-deposit').value = opt.dataset.deposit || '';
+      document.getElementById('contract-deposit').value = (opt.dataset.deposit !== null && opt.dataset.deposit !== undefined && opt.dataset.deposit !== '') ? opt.dataset.deposit : '';
       document.getElementById('contract-balance').value = opt.dataset.balance || 'unpaid';
       document.getElementById('contract-status').value = opt.dataset.status || 'not_generated';
       if (document.getElementById('contract-remark')) {
@@ -270,6 +278,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     updateContractTotal();
     renderContractPreviewFromForm();
+
+    // 显示/隐藏跟进记录、收款流水、收款汇总
+    const panels = ['followup-panel', 'payment-panel', 'payment-summary-panel'];
+    panels.forEach(pid => {
+      const el = document.getElementById(pid);
+      if (el) el.style.display = bookingId ? 'block' : 'none';
+    });
+    if (bookingId) {
+      renderFollowupList(bookingId);
+      renderPaymentList(bookingId);
+      renderPaymentSummary(bookingId);
+    }
   });
 
   document.getElementById('btn-preview-contract').addEventListener('click', function() {
@@ -339,6 +359,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (status) filters.contractStatus = status;
     if (type) filters.staffType = type;
     renderBookingList(filters);
+    if (typeof calendarMode !== 'undefined' && calendarMode !== 'list') {
+      renderCalendarView(filters);
+    }
   }
 
   document.getElementById('filter-date').addEventListener('change', applyBookingFilters);
@@ -356,6 +379,11 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   document.getElementById('btn-preview-export').addEventListener('click', function() {
+    const exportType = document.getElementById('export-type') ? document.getElementById('export-type').value : 'schedule';
+    if (exportType === 'followup') {
+      document.getElementById('export-preview').innerHTML = renderFollowupExportPreview();
+      return;
+    }
     const startDate = document.getElementById('export-start').value;
     const endDate = document.getElementById('export-end').value;
     const types = Array.from(document.querySelectorAll('.checkbox-group input:checked')).map(cb => cb.value);
@@ -378,6 +406,16 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   document.getElementById('btn-export-csv').addEventListener('click', function() {
+    const exportType = document.getElementById('export-type') ? document.getElementById('export-type').value : 'schedule';
+    if (exportType === 'followup') {
+      const result = exportFollowupToCSV();
+      if (result.success) {
+        showToast(`已成功导出 ${result.count} 条预订跟进记录：${result.filename}`, 'success');
+      } else {
+        showToast(result.message, 'error');
+      }
+      return;
+    }
     const startDate = document.getElementById('export-start').value;
     const endDate = document.getElementById('export-end').value;
     const types = Array.from(document.querySelectorAll('.checkbox-group input:checked')).map(cb => cb.value);
@@ -403,7 +441,154 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
+  // 导出类型切换
+  if (document.getElementById('export-type')) {
+    document.getElementById('export-type').addEventListener('change', function() {
+      const type = this.value;
+      const optPanel = document.getElementById('schedule-export-options');
+      const previewTitle = document.querySelector('.export-preview-panel h3');
+      if (optPanel) optPanel.style.display = type === 'schedule' ? 'block' : 'none';
+      if (previewTitle) previewTitle.textContent = type === 'schedule' ? '📋 未预订档期预览' : '📋 预订跟进表预览';
+      document.getElementById('export-preview').innerHTML = '<p class="empty-text small">设置条件后点击"预览数据"查看</p>';
+    });
+  }
+
+  // 跟进记录追加
+  if (document.getElementById('btn-add-followup')) {
+    document.getElementById('btn-add-followup').addEventListener('click', function() {
+      const bookingSelect = document.getElementById('contract-booking');
+      const bookingId = bookingSelect.value;
+      if (!bookingId) { showToast('请先选择预订记录', 'error'); return; }
+      const content = document.getElementById('followup-content').value.trim();
+      const nextContact = document.getElementById('followup-next').value;
+      const result = document.getElementById('followup-result').value;
+      if (!content) { showToast('请填写沟通内容', 'error'); return; }
+      addFollowup(bookingId, content, nextContact, result);
+      document.getElementById('followup-content').value = '';
+      document.getElementById('followup-next').value = '';
+      renderFollowupList(bookingId);
+      renderBookingList();
+      populateContractBookingSelect();
+      bookingSelect.value = bookingId;
+      showToast('跟进记录已保存', 'success');
+    });
+  }
+
+  // 跟进记录删除（事件委托）
+  document.addEventListener('click', function(e) {
+    const delBtn = e.target.closest('[data-fu-del]');
+    if (delBtn) {
+      if (confirm('确定要删除这条跟进记录吗？')) {
+        deleteFollowup(delBtn.dataset.fuDel);
+        const bookingSelect = document.getElementById('contract-booking');
+        const bookingId = bookingSelect ? bookingSelect.value : '';
+        if (bookingId) renderFollowupList(bookingId);
+        renderBookingList();
+        showToast('跟进记录已删除', 'success');
+      }
+      return;
+    }
+    // 收款流水删除
+    const pyDelBtn = e.target.closest('[data-py-del]');
+    if (pyDelBtn) {
+      if (confirm('确定要删除这条收款记录吗？删除后会自动重新计算付款状态。')) {
+        deletePayment(pyDelBtn.dataset.pyDel);
+        const bookingSelect = document.getElementById('contract-booking');
+        const bookingId = bookingSelect ? bookingSelect.value : '';
+        if (bookingId) {
+          renderPaymentList(bookingId);
+          renderPaymentSummary(bookingId);
+          renderContractPreviewFromForm();
+          populateContractBookingSelect();
+          bookingSelect.value = bookingId;
+        }
+        renderBookingList();
+        showToast('收款记录已删除，付款状态已更新', 'success');
+      }
+      return;
+    }
+    // 预订列表"合同"按钮
+    const jumpBtn = e.target.closest('[data-contract-jump]');
+    if (jumpBtn) {
+      switchView('contract');
+      setTimeout(() => {
+        populateContractBookingSelect();
+        const sel = document.getElementById('contract-booking');
+        if (sel) {
+          sel.value = jumpBtn.dataset.contractJump;
+          sel.dispatchEvent(new Event('change'));
+        }
+      }, 150);
+      return;
+    }
+    // 日历单元格里的单子
+    const calBooking = e.target.closest('[data-cal-booking]');
+    if (calBooking) {
+      const bid = calBooking.dataset.calBooking;
+      if (confirm(`要打开这条预订记录吗？\n点击"确定"进入编辑，点击"取消"跳转到合同页。`)) {
+        openEditBookingModal(bid);
+      } else {
+        switchView('contract');
+        setTimeout(() => {
+          populateContractBookingSelect();
+          const sel = document.getElementById('contract-booking');
+          if (sel) { sel.value = bid; sel.dispatchEvent(new Event('change')); }
+        }, 150);
+      }
+      return;
+    }
+    // 视图模式按钮
+    const vmBtn = e.target.closest('.view-mode-btn');
+    if (vmBtn) {
+      setCalendarMode(vmBtn.dataset.view);
+      return;
+    }
+  });
+
+  // 收款录入
+  if (document.getElementById('btn-add-payment')) {
+    document.getElementById('btn-add-payment').addEventListener('click', function() {
+      const bookingSelect = document.getElementById('contract-booking');
+      const bookingId = bookingSelect.value;
+      if (!bookingId) { showToast('请先选择预订记录', 'error'); return; }
+      const type = document.getElementById('payment-type').value;
+      const amount = document.getElementById('payment-amount').value;
+      const paidAt = document.getElementById('payment-date').value || new Date().toISOString().slice(0, 10);
+      const remark = document.getElementById('payment-remark').value.trim();
+      if (!amount || parseFloat(amount) <= 0) { showToast('请输入有效的金额', 'error'); return; }
+      const result = addPayment(bookingId, type, amount, remark, paidAt);
+      if (!result.success) { showToast(result.message, 'error'); return; }
+      document.getElementById('payment-amount').value = '';
+      document.getElementById('payment-remark').value = '';
+      renderPaymentList(bookingId);
+      renderPaymentSummary(bookingId);
+      renderContractPreviewFromForm();
+      renderBookingList();
+      populateContractBookingSelect();
+      bookingSelect.value = bookingId;
+      showToast(`${PAYMENT_TYPE_LABELS[type].label}已录入，付款状态已更新`, 'success');
+    });
+  }
+
+  // 日历控件：上一期/下一期/今天
+  if (document.getElementById('btn-cal-prev')) {
+    document.getElementById('btn-cal-prev').addEventListener('click', () => shiftCalendar(-1));
+  }
+  if (document.getElementById('btn-cal-next')) {
+    document.getElementById('btn-cal-next').addEventListener('click', () => shiftCalendar(1));
+  }
+  if (document.getElementById('btn-cal-today')) {
+    document.getElementById('btn-cal-today').addEventListener('click', function() {
+      calendarAnchor = new Date();
+      renderCalendarView();
+    });
+  }
+
   populateBookingStaffSelect('emcee');
+  // 初始化日历视图的默认收款日期
+  if (document.getElementById('payment-date')) {
+    document.getElementById('payment-date').value = new Date().toISOString().slice(0, 10);
+  }
 });
 
 function handleRecommend() {
@@ -672,7 +857,9 @@ function handleConfirmBooking() {
         const customerPhone = document.getElementById('pre-phone').value.trim();
         const venue = document.getElementById('pre-venue').value.trim();
         const sales = document.getElementById('pre-sales').value.trim();
-        const deposit = parseFloat(document.getElementById('pre-deposit').value) || 0;
+        const depositRaw = document.getElementById('pre-deposit').value.trim();
+        const deposit = (depositRaw === '' || depositRaw === null || depositRaw === undefined)
+          ? null : parseFloat(depositRaw);
         const balance = document.getElementById('pre-balance').value;
         const remark = document.getElementById('pre-remark').value.trim();
 
@@ -759,7 +946,9 @@ function handleManualBooking() {
   const customerPhone = document.getElementById('booking-phone').value.trim();
   const venue = document.getElementById('booking-venue') ? document.getElementById('booking-venue').value.trim() : '';
   const sales = document.getElementById('booking-sales') ? document.getElementById('booking-sales').value.trim() : '';
-  const deposit = document.getElementById('booking-deposit') ? parseFloat(document.getElementById('booking-deposit').value) || 0 : 0;
+  const depositRaw = document.getElementById('booking-deposit') ? document.getElementById('booking-deposit').value.trim() : '';
+  const deposit = (depositRaw === '' || depositRaw === null || depositRaw === undefined)
+    ? null : parseFloat(depositRaw);
   const balance = document.getElementById('booking-balance') ? document.getElementById('booking-balance').value : 'unpaid';
   const remark = document.getElementById('booking-remark') ? document.getElementById('booking-remark').value.trim() : '';
 
@@ -883,7 +1072,7 @@ function openEditBookingModal(bookingId) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
           <div>
             <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">定金金额</label>
-            <input type="number" id="edit-deposit" class="form-input" placeholder="已收定金金额" style="width:100%;" value="${booking.depositAmount || ''}">
+            <input type="number" id="edit-deposit" class="form-input" placeholder="已收定金金额" style="width:100%;" value="${(booking.depositAmount !== null && booking.depositAmount !== undefined && booking.depositAmount !== '') ? booking.depositAmount : ''}">
           </div>
           <div>
             <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">尾款状态</label>
@@ -974,7 +1163,9 @@ function openEditBookingModal(bookingId) {
         const customerPhone = document.getElementById('edit-phone').value.trim();
         const venue = document.getElementById('edit-venue').value.trim();
         const sales = document.getElementById('edit-sales').value.trim();
-        const deposit = parseFloat(document.getElementById('edit-deposit').value) || 0;
+        const depositRaw = document.getElementById('edit-deposit').value.trim();
+        const deposit = (depositRaw === '' || depositRaw === null || depositRaw === undefined)
+          ? null : parseFloat(depositRaw);
         const balance = document.getElementById('edit-balance').value;
         const date = document.getElementById('edit-date').value;
         const remark = document.getElementById('edit-remark').value.trim();

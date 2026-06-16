@@ -202,7 +202,20 @@
         </div>
 
         <div class="schedule-panel booking-list-panel">
-          <h3 class="panel-title">📋 所有预订记录</h3>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <h3 class="panel-title" style="margin:0;">📋 所有预订记录</h3>
+            <div style="display:flex;gap:4px;background:#FAF5EA;border-radius:8px;padding:3px;">
+              <button type="button" class="view-mode-btn active" data-view="list" style="background:transparent;border:none;padding:6px 14px;border-radius:6px;font-size:13px;cursor:pointer;color:#6B4423;transition:all 0.2s;">📋 列表</button>
+              <button type="button" class="view-mode-btn" data-view="week" style="background:transparent;border:none;padding:6px 14px;border-radius:6px;font-size:13px;cursor:pointer;color:#6B4423;transition:all 0.2s;">📅 周视图</button>
+              <button type="button" class="view-mode-btn" data-view="month" style="background:transparent;border:none;padding:6px 14px;border-radius:6px;font-size:13px;cursor:pointer;color:#6B4423;transition:all 0.2s;">🗓️ 月视图</button>
+            </div>
+          </div>
+          <div id="calendar-controls" class="booking-list-filters" style="display:none;margin-bottom:12px;">
+            <button type="button" id="btn-cal-prev" class="btn btn-secondary btn-sm" style="padding:6px 12px;font-size:12px;">‹ 上一期</button>
+            <span id="calendar-title" style="font-size:14px;font-weight:600;color:#3D2914;align-self:center;min-width:160px;text-align:center;"></span>
+            <button type="button" id="btn-cal-next" class="btn btn-secondary btn-sm" style="padding:6px 12px;font-size:12px;">下一期 ›</button>
+            <button type="button" id="btn-cal-today" class="btn btn-secondary btn-sm" style="padding:6px 12px;font-size:12px;">今天</button>
+          </div>
           <div class="booking-list-filters">
             <input type="date" id="filter-date" class="form-input form-input-sm" placeholder="按日期筛选">
             <input type="text" id="filter-customer" class="form-input form-input-sm" placeholder="🔍 搜索客户姓名">
@@ -227,6 +240,7 @@
             </button>
           </div>
           <div id="booking-list" class="booking-list"></div>
+          <div id="calendar-view" style="display:none;margin-top:8px;"></div>
         </div>
       </section>
 
@@ -349,6 +363,61 @@
                   <span class="btn-icon">🖨️</span> 打印 / 导出PDF
                 </button>
               </div>
+
+              <div id="payment-summary-panel" style="display:none;margin-top:20px;padding:16px;background:linear-gradient(135deg,#FFF8F0,#FFFFFF);border-radius:12px;border:1px solid #E8C4A0;">
+                <h4 style="margin:0 0 12px 0;font-size:14px;color:#3D2914;font-family:'Playfair Display',serif;">💰 收款汇总</h4>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+                  <div style="padding:10px;background:#fff;border-radius:8px;text-align:center;">
+                    <div style="font-size:11px;color:#A0896C;margin-bottom:4px;">合同总价</div>
+                    <div id="sum-total-price" style="font-size:16px;font-weight:700;color:#3D2914;">¥0.00</div>
+                  </div>
+                  <div style="padding:10px;background:#fff;border-radius:8px;text-align:center;">
+                    <div style="font-size:11px;color:#A0896C;margin-bottom:4px;">已收金额</div>
+                    <div id="sum-paid" style="font-size:16px;font-weight:700;color:#2D6A4F;">¥0.00</div>
+                  </div>
+                  <div style="padding:10px;background:#fff;border-radius:8px;text-align:center;">
+                    <div style="font-size:11px;color:#A0896C;margin-bottom:4px;">待收金额</div>
+                    <div id="sum-due" style="font-size:16px;font-weight:700;color:#C92A2A;">¥0.00</div>
+                  </div>
+                  <div style="padding:10px;background:#fff;border-radius:8px;text-align:center;">
+                    <div style="font-size:11px;color:#A0896C;margin-bottom:4px;">付款状态</div>
+                    <div id="sum-status" style="font-size:14px;font-weight:700;color:#B8956A;">未付款</div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="payment-panel" style="display:none;margin-top:20px;padding:16px;background:#FAF5EA;border-radius:12px;">
+                <h4 style="margin:0 0 12px 0;font-size:14px;color:#3D2914;font-family:'Playfair Display',serif;">💳 收款流水</h4>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr auto;gap:8px;margin-bottom:12px;">
+                  <select id="payment-type" class="form-select form-input-sm">
+                    <option value="deposit">💰 定金</option>
+                    <option value="balance">💳 尾款</option>
+                    <option value="refund">↩️ 退款/取消费</option>
+                  </select>
+                  <input type="number" id="payment-amount" class="form-input form-input-sm" placeholder="金额" style="padding:8px 10px;">
+                  <input type="date" id="payment-date" class="form-input form-input-sm" style="padding:8px 10px;">
+                  <input type="text" id="payment-remark" class="form-input form-input-sm" placeholder="备注（可选）" style="padding:8px 10px;">
+                  <button type="button" id="btn-add-payment" class="btn btn-primary btn-sm" style="padding:8px 14px;white-space:nowrap;">+ 录入</button>
+                </div>
+                <div id="payment-list" style="max-height:180px;overflow-y:auto;"></div>
+              </div>
+
+              <div id="followup-panel" style="display:none;margin-top:20px;padding:16px;background:#FFF8F0;border-radius:12px;border:1px dashed #E8C4A0;">
+                <h4 style="margin:0 0 12px 0;font-size:14px;color:#3D2914;font-family:'Playfair Display',serif;">📞 跟进记录</h4>
+                <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:12px;">
+                  <input type="text" id="followup-content" class="form-input form-input-sm" placeholder="沟通内容（客户反馈、需求变化等）" style="padding:8px 10px;">
+                  <input type="date" id="followup-next" class="form-input form-input-sm" style="padding:8px 10px;">
+                  <select id="followup-result" class="form-select form-input-sm">
+                    <option value="pending">⏳ 待跟进</option>
+                    <option value="followup">📞 继续跟进</option>
+                    <option value="confirmed">✅ 已确认</option>
+                    <option value="lost">❌ 流失</option>
+                    <option value="cancelled">🚫 已取消</option>
+                  </select>
+                  <button type="button" id="btn-add-followup" class="btn btn-secondary btn-sm" style="padding:8px 14px;white-space:nowrap;">+ 追加</button>
+                </div>
+                <div id="followup-list" style="max-height:200px;overflow-y:auto;"></div>
+              </div>
             </form>
           </div>
 
@@ -368,30 +437,41 @@
           <h3 class="panel-title">📊 导出条件设置</h3>
           <div class="form-row">
             <div class="form-field">
-              <label>开始日期</label>
-              <input type="date" id="export-start" class="form-input">
-            </div>
-            <div class="form-field">
-              <label>结束日期</label>
-              <input type="date" id="export-end" class="form-input">
+              <label>导出类型</label>
+              <select id="export-type" class="form-select">
+                <option value="schedule">📅 未预订档期一览表</option>
+                <option value="followup">📋 预订跟进表（客户/合同/付款/跟进）</option>
+              </select>
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-field form-field-full">
-              <label>人员类型（可多选）</label>
-              <div class="checkbox-group">
-                <label class="checkbox-item">
-                  <input type="checkbox" value="emcee" checked> 🎤 司仪
-                </label>
-                <label class="checkbox-item">
-                  <input type="checkbox" value="photographer" checked> 📷 摄影
-                </label>
-                <label class="checkbox-item">
-                  <input type="checkbox" value="cameraman" checked> 🎥 摄像
-                </label>
-                <label class="checkbox-item">
-                  <input type="checkbox" value="makeup" checked> 💄 化妆
-                </label>
+          <div id="schedule-export-options">
+            <div class="form-row">
+              <div class="form-field">
+                <label>开始日期</label>
+                <input type="date" id="export-start" class="form-input">
+              </div>
+              <div class="form-field">
+                <label>结束日期</label>
+                <input type="date" id="export-end" class="form-input">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-field form-field-full">
+                <label>人员类型（可多选）</label>
+                <div class="checkbox-group">
+                  <label class="checkbox-item">
+                    <input type="checkbox" value="emcee" checked> 🎤 司仪
+                  </label>
+                  <label class="checkbox-item">
+                    <input type="checkbox" value="photographer" checked> 📷 摄影
+                  </label>
+                  <label class="checkbox-item">
+                    <input type="checkbox" value="cameraman" checked> 🎥 摄像
+                  </label>
+                  <label class="checkbox-item">
+                    <input type="checkbox" value="makeup" checked> 💄 化妆
+                  </label>
+                </div>
               </div>
             </div>
           </div>

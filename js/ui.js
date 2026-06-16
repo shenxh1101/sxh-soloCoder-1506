@@ -287,7 +287,7 @@ function populateContractBookingSelect() {
         data-phone="${b.customerPhone || ''}"
         data-venue="${(b.weddingVenue || '').replace(/"/g, '&quot;')}"
         data-sales="${(b.salesPerson || '').replace(/"/g, '&quot;')}"
-        data-deposit="${b.depositAmount || 0}"
+        data-deposit="${(b.depositAmount !== null && b.depositAmount !== undefined && b.depositAmount !== '') ? b.depositAmount : ''}"
         data-balance="${b.balanceStatus || 'unpaid'}"
         data-status="${b.contractStatus || 'not_generated'}"
         data-remark="${(b.remark || '').replace(/"/g, '&quot;')}"
@@ -296,3 +296,328 @@ function populateContractBookingSelect() {
       >${b.date} · ${typeLabel} · ${customerText}${contractBadge}${statusText} · ${formatCurrency(b.totalPrice)}</option>`;
     }).join('');
 }
+
+// ==================== 跟进记录渲染 ====================
+function renderFollowupList(bookingId) {
+  const container = document.getElementById('followup-list');
+  if (!container) return;
+  const followups = getFollowups(bookingId);
+  if (followups.length === 0) {
+    container.innerHTML = '<p class="empty-text small" style="padding:16px;text-align:center;">暂无跟进记录，销售可在上方追加沟通内容</p>';
+    return;
+  }
+  container.innerHTML = followups.map(f => {
+    const resultLabel = FOLLOWUP_RESULT_LABELS[f.result] || FOLLOWUP_RESULT_LABELS.pending;
+    const time = new Date(f.createdAt).toLocaleString('zh-CN', {
+      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+    });
+    return `
+      <div style="display:flex;gap:10px;padding:10px 12px;background:#fff;border-radius:8px;margin-bottom:8px;border-left:3px solid ${resultLabel.color};">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="font-size:11px;color:#A0896C;">${time}</span>
+            <span style="font-size:11px;padding:1px 8px;border-radius:10px;background:${resultLabel.color}15;color:${resultLabel.color};">${resultLabel.icon} ${resultLabel.label}</span>
+            ${f.nextContactAt ? `<span style="font-size:11px;color:#1971C2;">📅 下次：${f.nextContactAt}</span>` : ''}
+          </div>
+          <div style="font-size:13px;color:#3D2914;line-height:1.6;word-break:break-word;">${escapeHtml(f.content) || '（未填写内容）'}</div>
+        </div>
+        <button data-fu-del="${f.id}" style="background:transparent;border:none;color:#C92A2A;cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;" onmouseover="this.style.background='rgba(201,42,42,0.1)'" onmouseout="this.style.background='transparent'">删除</button>
+      </div>
+    `;
+  }).join('');
+}
+
+// ==================== 收款流水渲染 ====================
+function renderPaymentList(bookingId) {
+  const container = document.getElementById('payment-list');
+  if (!container) return;
+  const payments = getPayments(bookingId);
+  if (payments.length === 0) {
+    container.innerHTML = '<p class="empty-text small" style="padding:16px;text-align:center;">暂无收款记录，录入后会自动更新付款状态和定金金额</p>';
+    return;
+  }
+  container.innerHTML = payments.map(p => {
+    const typeLabel = PAYMENT_TYPE_LABELS[p.type] || PAYMENT_TYPE_LABELS.deposit;
+    const sign = p.type === PAYMENT_TYPE.REFUND ? '-' : '+';
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#fff;border-radius:8px;margin-bottom:6px;">
+        <span style="font-size:12px;padding:2px 8px;border-radius:10px;background:${typeLabel.color}15;color:${typeLabel.color};min-width:72px;text-align:center;">${typeLabel.icon} ${typeLabel.label}</span>
+        <span style="font-size:13px;color:#3D2914;font-weight:600;flex-shrink:0;">${sign}${formatCurrency(p.amount)}</span>
+        <span style="font-size:11px;color:#A0896C;">${p.paidAt || ''}</span>
+        <span style="flex:1;font-size:12px;color:#6B4423;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(p.remark) || ''}</span>
+        <button data-py-del="${p.id}" style="background:transparent;border:none;color:#C92A2A;cursor:pointer;font-size:12px;padding:2px 6px;border-radius:4px;flex-shrink:0;" onmouseover="this.style.background='rgba(201,42,42,0.1)'" onmouseout="this.style.background='transparent'">删除</button>
+      </div>
+    `;
+  }).join('');
+}
+
+// ==================== 收款汇总渲染 ====================
+function renderPaymentSummary(bookingId) {
+  const panel = document.getElementById('payment-summary-panel');
+  if (!panel) return;
+  if (!bookingId) {
+    panel.style.display = 'none';
+    return;
+  }
+  const summary = calculatePaymentSummary(bookingId);
+  if (!summary) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+  const balanceLabel = BALANCE_STATUS_LABELS[summary.balanceStatus] || BALANCE_STATUS_LABELS.unpaid;
+  document.getElementById('sum-total-price').textContent = formatCurrency(summary.totalPrice);
+  document.getElementById('sum-paid').textContent = formatCurrency(summary.totalPaid);
+  document.getElementById('sum-due').textContent = formatCurrency(summary.amountDue);
+  document.getElementById('sum-status').textContent = balanceLabel.icon + ' ' + balanceLabel.label;
+  document.getElementById('sum-status').style.color = balanceLabel.color;
+}
+
+// ==================== 日历视图 ====================
+let calendarMode = 'list'; // list | week | month
+let calendarAnchor = new Date();
+
+function setCalendarMode(mode) {
+  calendarMode = mode;
+  document.querySelectorAll('.view-mode-btn').forEach(btn => {
+    if (btn.dataset.view === mode) {
+      btn.classList.add('active');
+      btn.style.background = '#fff';
+      btn.style.boxShadow = '0 1px 4px rgba(184,149,106,0.2)';
+      btn.style.fontWeight = '600';
+    } else {
+      btn.classList.remove('active');
+      btn.style.background = 'transparent';
+      btn.style.boxShadow = 'none';
+      btn.style.fontWeight = '400';
+    }
+  });
+  const isCal = mode !== 'list';
+  document.getElementById('booking-list').style.display = isCal ? 'none' : 'block';
+  document.getElementById('calendar-view').style.display = isCal ? 'block' : 'none';
+  document.getElementById('calendar-controls').style.display = isCal ? 'flex' : 'none';
+  if (isCal) renderCalendarView();
+}
+
+function shiftCalendar(delta) {
+  if (calendarMode === 'week') {
+    calendarAnchor.setDate(calendarAnchor.getDate() + delta * 7);
+  } else if (calendarMode === 'month') {
+    calendarAnchor.setMonth(calendarAnchor.getMonth() + delta);
+  }
+  renderCalendarView();
+}
+
+function renderCalendarView(filters = null) {
+  const container = document.getElementById('calendar-view');
+  if (!container) return;
+  const bookings = getBookings(filters || {});
+  const staff = getStaffList();
+  const emcees = staff.filter(s => s.type === STAFF_TYPES.EMCEE);
+  const photographers = staff.filter(s => s.type === STAFF_TYPES.PHOTOGRAPHER);
+  const cameramen = staff.filter(s => s.type === STAFF_TYPES.CAMERAMAN);
+  const makeupArtists = staff.filter(s => s.type === STAFF_TYPES.MAKEUP);
+
+  let dates = [];
+  let title = '';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (calendarMode === 'week') {
+    const start = new Date(calendarAnchor);
+    const day = start.getDay() || 7;
+    start.setDate(start.getDate() - day + 1);
+    title = `第 ${getWeekNumber(start)} 周 · ${formatDate(start)} ~ ${formatDate(new Date(start.getTime() + 6 * 86400000))}`;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      dates.push(d);
+    }
+  } else {
+    const year = calendarAnchor.getFullYear();
+    const month = calendarAnchor.getMonth();
+    title = `${year}年${month + 1}月`;
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startWeekday = firstDay.getDay() || 7;
+    for (let i = 1 - startWeekday; i <= lastDay.getDate(); i++) {
+      dates.push(new Date(year, month, i < 1 ? 1 : i));
+      if (i < 1) dates[dates.length - 1] = new Date(year, month - 1, new Date(year, month, 0).getDate() + i);
+    }
+  }
+
+  document.getElementById('calendar-title').textContent = title;
+
+  const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
+  const dateStrs = dates.map(formatDate);
+
+  // 构建每一天的预订字典
+  const byDate = {};
+  for (const b of bookings) {
+    if (!byDate[b.date]) byDate[b.date] = [];
+    byDate[b.date].push(b);
+  }
+
+  // 检查每种人员在某天是否有档期
+  function hasBooking(typeList, dateStr) {
+    for (const s of typeList) {
+      if (!s.bookedDates.includes(dateStr)) return false;
+    }
+    return true;
+  }
+
+  let html = '';
+  html += '<div style="display:grid;grid-template-columns:80px repeat(' + dates.length + ', 1fr);gap:1px;background:#E8C4A0;border:1px solid #E8C4A0;border-radius:8px;overflow:hidden;font-size:12px;">';
+  // 星期头
+  html += '<div style="background:#FAF5EA;padding:6px;text-align:center;font-weight:600;color:#6B4423;">类型</div>';
+  for (let i = 0; i < dates.length; i++) {
+    const d = dates[i];
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+    const isToday = formatDate(d) === formatDate(today);
+    html += `<div style="background:${isToday ? 'rgba(212,165,116,0.2)' : '#FAF5EA'};padding:6px;text-align:center;font-weight:600;color:${isWeekend ? '#C9184A' : '#6B4423'};">${weekdayLabels[i % 7]}<br><span style="font-size:14px;color:#3D2914;">${d.getDate()}</span></div>`;
+  }
+  // 司仪行
+  html += '<div style="background:#fff;padding:8px;color:#6B4423;font-weight:500;">🎤 司仪</div>';
+  for (let i = 0; i < dates.length; i++) {
+    const ds = dateStrs[i];
+    const busyCount = emcees.filter(s => s.bookedDates.includes(ds)).length;
+    const conflict = busyCount === emcees.length;
+    html += `<div style="background:${conflict ? 'rgba(201,42,42,0.08)' : '#fff'};padding:4px;text-align:center;color:${conflict ? '#C92A2A' : (busyCount > 0 ? '#B8956A' : '#2D6A4F')};font-size:11px;">${busyCount}/${emcees.length}</div>`;
+  }
+  // 摄影行
+  html += '<div style="background:#fff;padding:8px;color:#6B4423;font-weight:500;">📷 摄影</div>';
+  for (let i = 0; i < dates.length; i++) {
+    const ds = dateStrs[i];
+    const busyCount = photographers.filter(s => s.bookedDates.includes(ds)).length;
+    const conflict = busyCount === photographers.length;
+    html += `<div style="background:${conflict ? 'rgba(201,42,42,0.08)' : '#fff'};padding:4px;text-align:center;color:${conflict ? '#C92A2A' : (busyCount > 0 ? '#B8956A' : '#2D6A4F')};font-size:11px;">${busyCount}/${photographers.length}</div>`;
+  }
+  // 摄像行
+  html += '<div style="background:#fff;padding:8px;color:#6B4423;font-weight:500;">🎥 摄像</div>';
+  for (let i = 0; i < dates.length; i++) {
+    const ds = dateStrs[i];
+    const busyCount = cameramen.filter(s => s.bookedDates.includes(ds)).length;
+    const conflict = busyCount === cameramen.length;
+    html += `<div style="background:${conflict ? 'rgba(201,42,42,0.08)' : '#fff'};padding:4px;text-align:center;color:${conflict ? '#C92A2A' : (busyCount > 0 ? '#B8956A' : '#2D6A4F')};font-size:11px;">${busyCount}/${cameramen.length}</div>`;
+  }
+  // 化妆行
+  html += '<div style="background:#fff;padding:8px;color:#6B4423;font-weight:500;">💄 化妆</div>';
+  for (let i = 0; i < dates.length; i++) {
+    const ds = dateStrs[i];
+    const busyCount = makeupArtists.filter(s => s.bookedDates.includes(ds)).length;
+    const conflict = busyCount === makeupArtists.length;
+    html += `<div style="background:${conflict ? 'rgba(201,42,42,0.08)' : '#fff'};padding:4px;text-align:center;color:${conflict ? '#C92A2A' : (busyCount > 0 ? '#B8956A' : '#2D6A4F')};font-size:11px;">${busyCount}/${makeupArtists.length}</div>`;
+  }
+  // 订单行
+  html += '<div style="background:#fff;padding:8px;color:#6B4423;font-weight:500;">📋 订单</div>';
+  for (let i = 0; i < dates.length; i++) {
+    const ds = dateStrs[i];
+    const bList = byDate[ds] || [];
+    let cellHtml = '';
+    if (bList.length > 0) {
+      cellHtml = bList.slice(0, 3).map(b => {
+        const statusLabel = CONTRACT_STATUS_LABELS[b.contractStatus] || CONTRACT_STATUS_LABELS.not_generated;
+        return `<div data-cal-booking="${b.id}" style="font-size:10px;background:${statusLabel.color}12;color:${statusLabel.color};padding:2px 4px;border-radius:4px;margin-bottom:2px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(b.customerName || '未命名')} · ${formatCurrency(b.totalPrice)}">${statusLabel.icon}${escapeHtml((b.customerName || '未命名').substring(0, 4))}</div>`;
+      }).join('');
+      if (bList.length > 3) cellHtml += `<div style="font-size:10px;color:#A0896C;">+${bList.length - 3}</div>`;
+    }
+    html += `<div style="background:#fff;padding:2px;min-height:40px;">${cellHtml}</div>`;
+  }
+  html += '</div>';
+  html += '<div style="margin-top:8px;font-size:11px;color:#A0896C;display:flex;gap:16px;">';
+  html += '<span><span style="display:inline-block;width:10px;height:10px;background:rgba(45,106,79,0.3);border-radius:2px;margin-right:4px;"></span>档期充足</span>';
+  html += '<span><span style="display:inline-block;width:10px;height:10px;background:rgba(184,149,106,0.3);border-radius:2px;margin-right:4px;"></span>部分预订</span>';
+  html += '<span><span style="display:inline-block;width:10px;height:10px;background:rgba(201,42,42,0.3);border-radius:2px;margin-right:4px;"></span>当日全满（冲突）</span>';
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function getWeekNumber(d) {
+  const target = new Date(d.valueOf());
+  const dayNr = (d.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  }
+  return 1 + Math.ceil((firstThursday - target) / 604800000);
+}
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// ==================== 预订列表渲染（增加最近跟进内容） ====================
+const _origRenderBookingList = renderBookingList;
+renderBookingList = function(filters) {
+  const container = document.getElementById('booking-list');
+  if (!container) return;
+  const bookings = getBookings(filters);
+  if (bookings.length === 0) {
+    container.innerHTML = '<p class="empty-text">暂无预订记录</p>';
+    return;
+  }
+  let html = '';
+  bookings.forEach(b => {
+    let staffName = '';
+    let typeIcon = '🎎';
+    if (b.singleType) {
+      const t = TYPE_LABELS[b.singleType];
+      typeIcon = t.icon;
+      const s = getStaffById(b.emceeId || b.photographerId || b.cameramanId || b.makeupId);
+      staffName = s ? s.name : '未知人员';
+    } else {
+      const names = [];
+      if (b.emceeId) { const s = getStaffById(b.emceeId); if (s) names.push(s.name); }
+      if (b.photographerId) { const s = getStaffById(b.photographerId); if (s) names.push(s.name); }
+      if (b.cameramanId) { const s = getStaffById(b.cameramanId); if (s) names.push(s.name); }
+      if (b.makeupId) { const s = getStaffById(b.makeupId); if (s) names.push(s.name); }
+      staffName = names.join(' · ');
+    }
+
+    const contractBadge = b.contractNo
+      ? `<span style="display:inline-block;font-size:10px;background:rgba(212,165,116,0.15);color:#B8956A;padding:2px 8px;border-radius:10px;margin-left:6px;">📄 ${b.contractNo}</span>`
+      : '';
+
+    const statusLabel = CONTRACT_STATUS_LABELS[b.contractStatus] || CONTRACT_STATUS_LABELS.not_generated;
+    const statusBadge = `<span style="display:inline-block;font-size:10px;background:${statusLabel.color}15;color:${statusLabel.color};padding:2px 8px;border-radius:10px;margin-left:6px;">${statusLabel.icon} ${statusLabel.label}</span>`;
+
+    const balanceLabel = BALANCE_STATUS_LABELS[b.balanceStatus] || BALANCE_STATUS_LABELS.unpaid;
+    const balanceBadge = `<span style="display:inline-block;font-size:10px;background:${balanceLabel.color}15;color:${balanceLabel.color};padding:2px 8px;border-radius:10px;margin-left:6px;">${balanceLabel.icon} ${balanceLabel.label}</span>`;
+
+    const latestFu = getLatestFollowup(b.id);
+
+    const subInfo = [];
+    subInfo.push(`客户：${b.customerName || '未填写'}`);
+    if (b.customerPhone) subInfo.push(b.customerPhone);
+    if (b.salesPerson) subInfo.push(`销售：${b.salesPerson}`);
+    if (b.depositAmount !== null && b.depositAmount !== undefined && b.depositAmount !== '' && parseFloat(b.depositAmount) > 0) {
+      subInfo.push(`定金：${formatCurrency(parseFloat(b.depositAmount))}`);
+    }
+    if (latestFu && latestFu.content) {
+      subInfo.push(`📞 ${latestFu.content.substring(0, 12) + (latestFu.content.length > 12 ? '...' : '')}`);
+    }
+    if (b.remark) subInfo.push(`💬 ${b.remark.substring(0, 10) + (b.remark.length > 10 ? '...' : '')}`);
+
+    html += `
+      <div class="booking-item" data-booking-id="${b.id}">
+        <div class="booking-type-icon">${typeIcon}</div>
+        <div class="booking-info">
+          <div class="booking-info-main">${staffName}${contractBadge}${statusBadge}${balanceBadge}</div>
+          <div class="booking-info-sub">${subInfo.join(' · ')}</div>
+        </div>
+        <div class="booking-date">${b.date}</div>
+        <div style="display:flex;gap:6px;">
+          <button class="booking-del-btn" data-edit="${b.id}" style="background:rgba(45,106,79,0.1);color:#2D6A4F;border:none;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(45,106,79,0.2)'" onmouseout="this.style.background='rgba(45,106,79,0.1)'">✏️ 编辑</button>
+          <button class="booking-del-btn" data-contract-jump="${b.id}" style="background:rgba(25,113,194,0.1);color:#1971C2;border:none;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(25,113,194,0.2)'" onmouseout="this.style.background='rgba(25,113,194,0.1)'">📄 合同</button>
+          <button class="booking-del-btn" data-del="${b.id}">取消</button>
+        </div>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+};

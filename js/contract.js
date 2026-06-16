@@ -11,7 +11,7 @@ function renderStars(count) {
   return '★'.repeat(count) + '☆'.repeat(5 - count);
 }
 
-function buildContractData(formData) {
+function buildContractData(formData, bookingId = null) {
   const emcee = getStaffById(formData.emceeId);
   const photographer = getStaffById(formData.photographerId);
   const cameraman = getStaffById(formData.cameramanId);
@@ -24,8 +24,29 @@ function buildContractData(formData) {
   if (makeup) staffList.push({ type: '化妆师', typeIcon: '💄', ...makeup });
 
   const totalPrice = staffList.reduce((sum, s) => sum + s.price, 0);
-  const depositAmount = formData.depositAmount || 0;
-  const balanceAmount = totalPrice - depositAmount;
+  let depositAmount = (formData.depositAmount === null || formData.depositAmount === undefined || formData.depositAmount === '')
+    ? 0 : parseFloat(formData.depositAmount) || 0;
+  let balanceAmount = Math.max(0, totalPrice - depositAmount);
+  let totalPaid = depositAmount;
+  let amountDue = balanceAmount;
+  let totalRefund = 0;
+  let paymentCount = 0;
+  let hasPayments = false;
+
+  // 如果有预订记录，用收款流水重新计算（覆盖表单输入）
+  if (bookingId) {
+    const summary = calculatePaymentSummary(bookingId);
+    if (summary && summary.paymentCount > 0) {
+      hasPayments = true;
+      depositAmount = summary.totalDeposit;
+      totalPaid = summary.totalPaid;
+      amountDue = summary.amountDue;
+      totalRefund = summary.totalRefund;
+      balanceAmount = Math.max(0, summary.amountDue);
+      paymentCount = summary.paymentCount;
+      formData.balanceStatus = summary.balanceStatus;
+    }
+  }
 
   let serviceLevel = '单项服务';
   if (staffList.length === 4 && emcee && photographer && cameraman && makeup) {
@@ -49,6 +70,11 @@ function buildContractData(formData) {
     salesPerson: formData.salesPerson || '____________',
     depositAmount: depositAmount,
     balanceAmount: balanceAmount,
+    totalPaid: totalPaid,
+    amountDue: amountDue,
+    totalRefund: totalRefund,
+    paymentCount: paymentCount,
+    hasPayments: hasPayments,
     balanceStatus: formData.balanceStatus || 'unpaid',
     balanceLabel: balanceLabel,
     remark: formData.remark || '',
@@ -132,8 +158,15 @@ function renderContractHTML(data) {
         <div style="grid-column:1/-1;"><span style="color:#6B4423;">婚礼地点：</span><span style="font-weight:600;">${data.weddingVenue}</span></div>
         <div><span style="color:#6B4423;">销售负责人：</span><span style="font-weight:600;">${data.salesPerson}</span></div>
         <div><span style="color:#6B4423;">付款状态：</span><span style="font-weight:600;color:${data.balanceLabel.color};">${data.balanceLabel.icon} ${data.balanceLabel.label}</span></div>
-        <div><span style="color:#6B4423;">已收定金：</span><span style="font-weight:600;">${formatCurrency(data.depositAmount)}</span></div>
+        ${data.hasPayments ? `
+        <div><span style="color:#6B4423;">已收总额：</span><span style="font-weight:600;color:#2D6A4F;">${formatCurrency(data.totalPaid)}</span></div>
+        <div><span style="color:#6B4423;">待收金额：</span><span style="font-weight:600;color:#C92A2A;">${formatCurrency(data.amountDue)}</span></div>
+        ${data.totalRefund > 0 ? `<div style="grid-column:1/-1;"><span style="color:#6B4423;">退款/取消费：</span><span style="font-weight:600;color:#C92A2A;">-${formatCurrency(data.totalRefund)}</span></div>` : ''}
+        <div style="grid-column:1/-1;font-size:11px;color:#A0896C;">（基于 ${data.paymentCount} 条收款流水自动计算，定金 ${formatCurrency(data.depositAmount)}）</div>
+        ` : `
+        <div><span style="color:#6B4423;">已收定金：</span><span style="font-weight:600;">${data.depositAmount > 0 ? formatCurrency(data.depositAmount) : '未录入'}</span></div>
         <div><span style="color:#6B4423;">剩余尾款：</span><span style="font-weight:600;">${formatCurrency(data.balanceAmount)}</span></div>
+        `}
         <div style="grid-column:1/-1;"><span style="color:#6B4423;">服务类型：</span><span style="font-weight:600;">${data.serviceLevel}</span></div>
         <div style="grid-column:1/-1;"><span style="color:#6B4423;">乙方（服务方）：</span><span style="font-weight:600;">良缘阁婚庆策划有限公司</span></div>
       </div>
