@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>良缘阁 · 婚庆四大金刚档期管理与智能推荐</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="page-wrapper">
+    <header class="site-header">
+      <div class="header-inner">
+        <div class="brand">
+          <span class="brand-flourish">❦</span>
+          <h1 class="brand-title">良缘阁</h1>
+          <span class="brand-flourish">❦</span>
+        </div>
+        <p class="brand-subtitle">Wedding · Four Pillars · Matchmaking</p>
+        <nav class="main-nav">
+          <button class="nav-btn active" data-view="recommend">智能推荐</button>
+          <button class="nav-btn" data-view="schedule">档期管理</button>
+          <button class="nav-btn" data-view="contract">合同生成</button>
+          <button class="nav-btn" data-view="export">导出档期</button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="site-main">
+      <section id="view-recommend" class="view active">
+        <div class="hero-section">
+          <h2 class="hero-title">
+            <span class="hero-title-line">为您的完美婚礼</span>
+            <span class="hero-title-line hero-title-accent">匹配最佳服务团队</span>
+          </h2>
+          <p class="hero-desc">司仪 · 摄影 · 摄像 · 化妆师 — 智能匹配，一步到位</p>
+        </div>
+
+        <div class="filter-panel">
+          <div class="filter-group">
+            <label class="filter-label">
+              <span class="filter-icon">📅</span>
+              婚礼日期
+            </label>
+            <input type="date" id="wedding-date" class="date-input">
+          </div>
+          <div class="filter-group filter-group-budget">
+            <label class="filter-label">
+              <span class="filter-icon">💰</span>
+              预算范围
+            </label>
+            <div class="budget-inputs">
+              <input type="number" id="budget-min" class="budget-input" placeholder="最低预算" value="15000">
+              <span class="budget-sep">—</span>
+              <input type="number" id="budget-max" class="budget-input" placeholder="最高预算" value="50000">
+            </div>
+            <div class="budget-slider-wrap">
+              <div class="budget-display">
+                <span>预算偏好：</span>
+                <strong id="budget-target-display">¥30,000</strong>
+              </div>
+              <input type="range" id="budget-target" class="budget-slider" min="10000" max="80000" step="1000" value="30000">
+            </div>
+          </div>
+          <div class="filter-group filter-group-action">
+            <button id="btn-recommend" class="btn btn-primary btn-lg">
+              <span class="btn-icon">✨</span>
+              开始智能匹配
+            </button>
+          </div>
+        </div>
+
+        <div id="recommend-empty" class="empty-state">
+          <div class="empty-illustration">💐</div>
+          <p class="empty-text">请选择婚礼日期和预算，开启您的完美匹配之旅</p>
+        </div>
+
+        <div id="recommend-results" class="recommend-results hidden">
+          <div class="results-header">
+            <div>
+              <h3 class="results-title">为您精选的黄金组合</h3>
+              <p class="results-subtitle" id="results-subtitle"></p>
+            </div>
+            <div class="combo-nav">
+              <button id="btn-prev-combo" class="btn-icon-circle" title="上一组">‹</button>
+              <span id="combo-index" class="combo-index">1 / 1</span>
+              <button id="btn-next-combo" class="btn-icon-circle" title="下一组">›</button>
+            </div>
+          </div>
+
+          <div id="staff-cards" class="staff-grid"></div>
+
+          <div class="summary-bar">
+            <div class="summary-left">
+              <span class="summary-label">组合总价</span>
+              <span id="total-price" class="summary-price">¥0</span>
+              <span id="budget-match" class="budget-match"></span>
+            </div>
+            <div class="summary-right">
+              <button id="btn-confirm-booking" class="btn btn-primary btn-pulse">
+                <span>确认预订此组合</span>
+                <span class="btn-arrow">→</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-schedule" class="view">
+        <div class="page-header">
+          <h2 class="page-title">档期管理中心</h2>
+          <p class="page-desc">查看所有人员档期状态，手动录入预订并检测冲突</p>
+        </div>
+
+        <div class="schedule-layout">
+          <div class="schedule-panel">
+            <h3 class="panel-title">📝 手动录入预订</h3>
+            <div id="conflict-warning" class="conflict-warning hidden">
+              <span class="warning-icon">⚠️</span>
+              <span id="conflict-text">档期冲突警告</span>
+            </div>
+            <form id="booking-form" class="booking-form">
+              <div class="form-row">
+                <div class="form-field">
+                  <label>人员类型</label>
+                  <select id="booking-type" class="form-select">
+                    <option value="emcee">🎤 司仪</option>
+                    <option value="photographer">📷 摄影师</option>
+                    <option value="cameraman">🎥 摄像师</option>
+                    <option value="makeup">💄 化妆师</option>
+                  </select>
+                </div>
+                <div class="form-field">
+                  <label>选择人员</label>
+                  <select id="booking-staff" class="form-select"></select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label>预订日期</label>
+                  <input type="date" id="booking-date" class="form-input">
+                </div>
+                <div class="form-field">
+                  <label>客户姓名</label>
+                  <input type="text" id="booking-customer" class="form-input" placeholder="请输入客户姓名">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label>联系电话</label>
+                  <input type="tel" id="booking-phone" class="form-input" placeholder="请输入联系电话">
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary btn-block">
+                <span class="btn-icon">💾</span> 保存预订
+              </button>
+            </form>
+          </div>
+
+          <div class="schedule-panel staff-overview-panel">
+            <h3 class="panel-title">👥 人员档期概览</h3>
+            <div class="staff-tabs" id="staff-tabs">
+              <button class="staff-tab active" data-type="emcee">🎤 司仪</button>
+              <button class="staff-tab" data-type="photographer">📷 摄影</button>
+              <button class="staff-tab" data-type="cameraman">🎥 摄像</button>
+              <button class="staff-tab" data-type="makeup">💄 化妆</button>
+            </div>
+            <div id="staff-list" class="staff-list"></div>
+          </div>
+        </div>
+
+        <div class="schedule-panel booking-list-panel">
+          <h3 class="panel-title">📋 所有预订记录</h3>
+          <div class="booking-list-filters">
+            <input type="date" id="filter-date" class="form-input form-input-sm" placeholder="按日期筛选">
+            <select id="filter-type" class="form-select form-select-sm">
+              <option value="">全部类型</option>
+              <option value="emcee">司仪</option>
+              <option value="photographer">摄影</option>
+              <option value="cameraman">摄像</option>
+              <option value="makeup">化妆</option>
+            </select>
+          </div>
+          <div id="booking-list" class="booking-list"></div>
+        </div>
+      </section>
+
+      <section id="view-contract" class="view">
+        <div class="page-header">
+          <h2 class="page-title">服务合同生成</h2>
+          <p class="page-desc">录入客户信息，生成并打印婚庆服务合同</p>
+        </div>
+
+        <div class="contract-layout">
+          <div class="schedule-panel">
+            <h3 class="panel-title">📝 合同信息录入</h3>
+            <form id="contract-form" class="booking-form">
+              <div class="form-row">
+                <div class="form-field">
+                  <label>客户姓名</label>
+                  <input type="text" id="contract-customer" class="form-input" placeholder="新人姓名">
+                </div>
+                <div class="form-field">
+                  <label>联系电话</label>
+                  <input type="tel" id="contract-phone" class="form-input" placeholder="联系电话">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label>婚礼日期</label>
+                  <input type="date" id="contract-date" class="form-input">
+                </div>
+                <div class="form-field">
+                  <label>合同编号</label>
+                  <input type="text" id="contract-no" class="form-input" readonly>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field form-field-full">
+                  <label>选择预订记录（可选）</label>
+                  <select id="contract-booking" class="form-select">
+                    <option value="">— 手动选择人员 —</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label>司仪</label>
+                  <select id="contract-emcee" class="form-select contract-staff-select"></select>
+                </div>
+                <div class="form-field">
+                  <label>摄影</label>
+                  <select id="contract-photographer" class="form-select contract-staff-select"></select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label>摄像</label>
+                  <select id="contract-cameraman" class="form-select contract-staff-select"></select>
+                </div>
+                <div class="form-field">
+                  <label>化妆</label>
+                  <select id="contract-makeup" class="form-select contract-staff-select"></select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field form-field-full">
+                  <label>合同总价</label>
+                  <input type="text" id="contract-total" class="form-input" readonly>
+                </div>
+              </div>
+              <div class="contract-actions">
+                <button type="button" id="btn-preview-contract" class="btn btn-secondary">
+                  <span class="btn-icon">👁️</span> 预览合同
+                </button>
+                <button type="button" id="btn-print-contract" class="btn btn-primary">
+                  <span class="btn-icon">🖨️</span> 打印 / 导出PDF
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="contract-preview-wrap">
+            <div id="contract-preview" class="contract-paper"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-export" class="view">
+        <div class="page-header">
+          <h2 class="page-title">档期数据导出</h2>
+          <p class="page-desc">导出未预订档期一览表（Excel格式），方便销售电话推销</p>
+        </div>
+
+        <div class="schedule-panel">
+          <h3 class="panel-title">📊 导出条件设置</h3>
+          <div class="form-row">
+            <div class="form-field">
+              <label>开始日期</label>
+              <input type="date" id="export-start" class="form-input">
+            </div>
+            <div class="form-field">
+              <label>结束日期</label>
+              <input type="date" id="export-end" class="form-input">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field form-field-full">
+              <label>人员类型（可多选）</label>
+              <div class="checkbox-group">
+                <label class="checkbox-item">
+                  <input type="checkbox" value="emcee" checked> 🎤 司仪
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="photographer" checked> 📷 摄影
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="cameraman" checked> 🎥 摄像
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" value="makeup" checked> 💄 化妆
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="export-actions">
+            <button id="btn-preview-export" class="btn btn-secondary">
+              <span class="btn-icon">📋</span> 预览数据
+            </button>
+            <button id="btn-export-csv" class="btn btn-primary">
+              <span class="btn-icon">📥</span> 导出 Excel (.csv)
+            </button>
+          </div>
+        </div>
+
+        <div class="schedule-panel export-preview-panel">
+          <h3 class="panel-title">📋 未预订档期预览</h3>
+          <div id="export-preview" class="export-preview-table">
+            <p class="empty-text small">设置条件后点击"预览数据"查看</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>© 2026 良缘阁婚庆策划 · 四大金刚智能匹配系统</p>
+    </footer>
+  </div>
+
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <button class="modal-close" id="modal-close">×</button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/recommend.js"></script>
+  <script src="js/schedule.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/contract.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
