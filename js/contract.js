@@ -24,6 +24,8 @@ function buildContractData(formData) {
   if (makeup) staffList.push({ type: '化妆师', typeIcon: '💄', ...makeup });
 
   const totalPrice = staffList.reduce((sum, s) => sum + s.price, 0);
+  const depositAmount = formData.depositAmount || 0;
+  const balanceAmount = totalPrice - depositAmount;
 
   let serviceLevel = '单项服务';
   if (staffList.length === 4 && emcee && photographer && cameraman && makeup) {
@@ -36,11 +38,19 @@ function buildContractData(formData) {
     serviceLevel = '（待选择服务人员）';
   }
 
+  const balanceLabel = BALANCE_STATUS_LABELS[formData.balanceStatus] || BALANCE_STATUS_LABELS.unpaid;
+
   return {
     contractNo: formData.contractNo || generateContractNo(),
     customerName: formData.customerName || '____________',
     customerPhone: formData.customerPhone || '____________',
     weddingDate: formData.weddingDate || '____________',
+    weddingVenue: formData.weddingVenue || '____________',
+    salesPerson: formData.salesPerson || '____________',
+    depositAmount: depositAmount,
+    balanceAmount: balanceAmount,
+    balanceStatus: formData.balanceStatus || 'unpaid',
+    balanceLabel: balanceLabel,
     remark: formData.remark || '',
     serviceLevel: serviceLevel,
     isFullPackage: staffList.length === 4,
@@ -119,6 +129,11 @@ function renderContractHTML(data) {
         <div><span style="color:#6B4423;">甲方（客户）：</span><span style="font-weight:600;">${data.customerName}</span></div>
         <div><span style="color:#6B4423;">联系电话：</span><span style="font-weight:600;">${data.customerPhone}</span></div>
         <div style="grid-column:1/-1;"><span style="color:#6B4423;">婚礼日期：</span><span style="font-weight:600;">${data.weddingDate}</span></div>
+        <div style="grid-column:1/-1;"><span style="color:#6B4423;">婚礼地点：</span><span style="font-weight:600;">${data.weddingVenue}</span></div>
+        <div><span style="color:#6B4423;">销售负责人：</span><span style="font-weight:600;">${data.salesPerson}</span></div>
+        <div><span style="color:#6B4423;">付款状态：</span><span style="font-weight:600;color:${data.balanceLabel.color};">${data.balanceLabel.icon} ${data.balanceLabel.label}</span></div>
+        <div><span style="color:#6B4423;">已收定金：</span><span style="font-weight:600;">${formatCurrency(data.depositAmount)}</span></div>
+        <div><span style="color:#6B4423;">剩余尾款：</span><span style="font-weight:600;">${formatCurrency(data.balanceAmount)}</span></div>
         <div style="grid-column:1/-1;"><span style="color:#6B4423;">服务类型：</span><span style="font-weight:600;">${data.serviceLevel}</span></div>
         <div style="grid-column:1/-1;"><span style="color:#6B4423;">乙方（服务方）：</span><span style="font-weight:600;">良缘阁婚庆策划有限公司</span></div>
       </div>
@@ -157,7 +172,7 @@ function renderContractHTML(data) {
       <h3 style="font-family:'Playfair Display',serif;font-size:18px;color:#3D2914;margin:0 0 14px 0;padding-bottom:8px;border-bottom:2px solid #D4A574;">二、服务条款</h3>
       <div style="font-size:13px;line-height:1.9;color:#6B4423;padding:0 8px;">
         <p style="margin:0 0 8px 0;">1. 乙方应按照约定日期提供上述人员的婚庆服务，确保服务质量符合行业标准。</p>
-        <p style="margin:0 0 8px 0;">2. 甲方应于合同签订时支付服务总金额的 50% 作为定金，尾款于婚礼当日结清。</p>
+        <p style="margin:0 0 8px 0;">2. 付款方式：已收定金 <strong>${formatCurrency(data.depositAmount)}</strong>，剩余尾款 <strong>${formatCurrency(data.balanceAmount)}</strong> 应于婚礼当日结清。</p>
         <p style="margin:0 0 8px 0;">3. 如因甲方原因取消服务，定金不予退还；如因乙方原因无法提供服务，应双倍返还定金。</p>
         <p style="margin:0 0 8px 0;">4. 服务人员如需临时更换，乙方需提前 7 日通知甲方，并提供同等或更高星级人员。</p>
         <p style="margin:0 0 8px 0;">5. 本合同一式两份，甲乙双方各执一份，自双方签字之日起生效。</p>

@@ -53,6 +53,10 @@ function renderContractPreviewFromForm() {
     customerName: document.getElementById('contract-customer').value,
     customerPhone: document.getElementById('contract-phone').value,
     weddingDate: document.getElementById('contract-date').value,
+    weddingVenue: document.getElementById('contract-venue').value,
+    salesPerson: document.getElementById('contract-sales').value,
+    depositAmount: parseFloat(document.getElementById('contract-deposit').value) || 0,
+    balanceStatus: document.getElementById('contract-balance').value,
     emceeId: document.getElementById('contract-emcee').value || null,
     photographerId: document.getElementById('contract-photographer').value || null,
     cameramanId: document.getElementById('contract-cameraman').value || null,
@@ -61,6 +65,24 @@ function renderContractPreviewFromForm() {
   };
   const data = buildContractData(formData);
   document.getElementById('contract-preview').innerHTML = renderContractPreview(data);
+}
+
+function syncContractToBooking() {
+  const bookingSelect = document.getElementById('contract-booking');
+  const bookingId = bookingSelect.value;
+  if (!bookingId) return;
+  const updates = {
+    customerName: document.getElementById('contract-customer').value,
+    customerPhone: document.getElementById('contract-phone').value,
+    weddingVenue: document.getElementById('contract-venue').value,
+    salesPerson: document.getElementById('contract-sales').value,
+    depositAmount: parseFloat(document.getElementById('contract-deposit').value) || 0,
+    balanceStatus: document.getElementById('contract-balance').value,
+    remark: document.getElementById('contract-remark') ? document.getElementById('contract-remark').value : ''
+  };
+  updateBooking(bookingId, updates);
+  populateContractBookingSelect();
+  bookingSelect.value = bookingId;
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -175,7 +197,8 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   ['contract-emcee', 'contract-photographer', 'contract-cameraman', 'contract-makeup',
-   'contract-customer', 'contract-phone', 'contract-date', 'contract-remark'].forEach(id => {
+   'contract-customer', 'contract-phone', 'contract-date', 'contract-remark',
+   'contract-venue', 'contract-sales', 'contract-deposit', 'contract-balance'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('change', function() {
@@ -190,32 +213,50 @@ document.addEventListener('DOMContentLoaded', function() {
 
   document.getElementById('contract-booking').addEventListener('change', function() {
     const opt = this.options[this.selectedIndex];
-    
+    const bookingId = opt && opt.value ? opt.value : '';
+
     ['contract-emcee', 'contract-photographer', 'contract-cameraman', 'contract-makeup'].forEach(id => {
       document.getElementById(id).value = '';
     });
 
-    if (opt && opt.value) {
+    document.getElementById('contract-date').value = '';
+    document.getElementById('contract-customer').value = '';
+    document.getElementById('contract-phone').value = '';
+    document.getElementById('contract-venue').value = '';
+    document.getElementById('contract-sales').value = '';
+    document.getElementById('contract-deposit').value = '';
+    document.getElementById('contract-balance').value = 'unpaid';
+    document.getElementById('contract-status').value = 'not_generated';
+    if (document.getElementById('contract-remark')) {
+      document.getElementById('contract-remark').value = '';
+    }
+
+    if (bookingId) {
       const isType = opt.dataset.istype;
       const contractNo = opt.dataset.contractno || '';
 
-      if (opt.dataset.date) document.getElementById('contract-date').value = opt.dataset.date;
-      if (opt.dataset.customer) document.getElementById('contract-customer').value = opt.dataset.customer;
-      if (opt.dataset.phone) document.getElementById('contract-phone').value = opt.dataset.phone;
-      if (opt.dataset.remark && document.getElementById('contract-remark')) {
-        document.getElementById('contract-remark').value = opt.dataset.remark;
+      document.getElementById('contract-date').value = opt.dataset.date || '';
+      document.getElementById('contract-customer').value = opt.dataset.customer || '';
+      document.getElementById('contract-phone').value = opt.dataset.phone || '';
+      document.getElementById('contract-venue').value = opt.dataset.venue || '';
+      document.getElementById('contract-sales').value = opt.dataset.sales || '';
+      document.getElementById('contract-deposit').value = opt.dataset.deposit || '';
+      document.getElementById('contract-balance').value = opt.dataset.balance || 'unpaid';
+      document.getElementById('contract-status').value = opt.dataset.status || 'not_generated';
+      if (document.getElementById('contract-remark')) {
+        document.getElementById('contract-remark').value = opt.dataset.remark || '';
       }
 
       if (isType) {
-        if (isType === 'emcee' && opt.dataset.emcee) document.getElementById('contract-emcee').value = opt.dataset.emcee;
-        if (isType === 'photographer' && opt.dataset.photographer) document.getElementById('contract-photographer').value = opt.dataset.photographer;
-        if (isType === 'cameraman' && opt.dataset.cameraman) document.getElementById('contract-cameraman').value = opt.dataset.cameraman;
-        if (isType === 'makeup' && opt.dataset.makeup) document.getElementById('contract-makeup').value = opt.dataset.makeup;
+        if (isType === 'emcee') document.getElementById('contract-emcee').value = opt.dataset.emcee || '';
+        if (isType === 'photographer') document.getElementById('contract-photographer').value = opt.dataset.photographer || '';
+        if (isType === 'cameraman') document.getElementById('contract-cameraman').value = opt.dataset.cameraman || '';
+        if (isType === 'makeup') document.getElementById('contract-makeup').value = opt.dataset.makeup || '';
       } else {
-        if (opt.dataset.emcee) document.getElementById('contract-emcee').value = opt.dataset.emcee;
-        if (opt.dataset.photographer) document.getElementById('contract-photographer').value = opt.dataset.photographer;
-        if (opt.dataset.cameraman) document.getElementById('contract-cameraman').value = opt.dataset.cameraman;
-        if (opt.dataset.makeup) document.getElementById('contract-makeup').value = opt.dataset.makeup;
+        document.getElementById('contract-emcee').value = opt.dataset.emcee || '';
+        document.getElementById('contract-photographer').value = opt.dataset.photographer || '';
+        document.getElementById('contract-cameraman').value = opt.dataset.cameraman || '';
+        document.getElementById('contract-makeup').value = opt.dataset.makeup || '';
       }
 
       if (contractNo) {
@@ -225,12 +266,6 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     } else {
       document.getElementById('contract-no').value = generateContractNo();
-      document.getElementById('contract-date').value = '';
-      document.getElementById('contract-customer').value = '';
-      document.getElementById('contract-phone').value = '';
-      if (document.getElementById('contract-remark')) {
-        document.getElementById('contract-remark').value = '';
-      }
     }
     
     updateContractTotal();
@@ -245,7 +280,79 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('btn-print-contract').addEventListener('click', function() {
     renderContractPreviewFromForm();
     const html = document.getElementById('contract-preview').innerHTML;
+    
+    const bookingSelect = document.getElementById('contract-booking');
+    const bookingId = bookingSelect.value;
+    if (bookingId) {
+      updateContractStatus(bookingId, CONTRACT_STATUS.PRINTED);
+      document.getElementById('contract-status').value = CONTRACT_STATUS.PRINTED;
+      showToast('合同已打印，状态已更新为「已打印」', 'success');
+    }
+    
     printContract(html);
+  });
+
+  document.getElementById('btn-mark-signed').addEventListener('click', function() {
+    const bookingSelect = document.getElementById('contract-booking');
+    const bookingId = bookingSelect.value;
+    if (!bookingId) {
+      showToast('请先选择预订记录', 'error');
+      return;
+    }
+    if (confirm('确定要将此合同标记为「已签约」吗？')) {
+      updateContractStatus(bookingId, CONTRACT_STATUS.SIGNED);
+      document.getElementById('contract-status').value = CONTRACT_STATUS.SIGNED;
+      populateContractBookingSelect();
+      bookingSelect.value = bookingId;
+      showToast('合同状态已更新为「已签约」', 'success');
+    }
+  });
+
+  document.getElementById('contract-status').addEventListener('change', function() {
+    const bookingSelect = document.getElementById('contract-booking');
+    const bookingId = bookingSelect.value;
+    if (!bookingId) return;
+    const newStatus = this.value;
+    updateContractStatus(bookingId, newStatus);
+    populateContractBookingSelect();
+    bookingSelect.value = bookingId;
+    const statusLabel = CONTRACT_STATUS_LABELS[newStatus];
+    showToast(`合同状态已更新为「${statusLabel.icon} ${statusLabel.label}」`, 'success');
+  });
+
+  document.getElementById('contract-venue').addEventListener('input', syncContractToBooking);
+  document.getElementById('contract-sales').addEventListener('input', syncContractToBooking);
+  document.getElementById('contract-deposit').addEventListener('input', syncContractToBooking);
+  document.getElementById('contract-balance').addEventListener('change', syncContractToBooking);
+  document.getElementById('contract-customer').addEventListener('input', syncContractToBooking);
+  document.getElementById('contract-phone').addEventListener('input', syncContractToBooking);
+  document.getElementById('contract-remark').addEventListener('input', syncContractToBooking);
+
+  function applyBookingFilters() {
+    const filters = {};
+    const date = document.getElementById('filter-date').value;
+    const customer = document.getElementById('filter-customer').value.trim();
+    const status = document.getElementById('filter-status').value;
+    const type = document.getElementById('filter-type').value;
+    if (date) filters.date = date;
+    if (customer) filters.customerName = customer;
+    if (status) filters.contractStatus = status;
+    if (type) filters.staffType = type;
+    renderBookingList(filters);
+  }
+
+  document.getElementById('filter-date').addEventListener('change', applyBookingFilters);
+  document.getElementById('filter-customer').addEventListener('input', applyBookingFilters);
+  document.getElementById('filter-status').addEventListener('change', applyBookingFilters);
+  document.getElementById('filter-type').addEventListener('change', applyBookingFilters);
+
+  document.getElementById('btn-clear-filters').addEventListener('click', function() {
+    document.getElementById('filter-date').value = '';
+    document.getElementById('filter-customer').value = '';
+    document.getElementById('filter-status').value = '';
+    document.getElementById('filter-type').value = '';
+    renderBookingList();
+    showToast('筛选条件已清除', 'success');
   });
 
   document.getElementById('btn-preview-export').addEventListener('click', function() {
@@ -517,9 +624,33 @@ function handleConfirmBooking() {
             <input type="tel" id="pre-phone" class="form-input" placeholder="请输入联系电话" style="width:100%;">
           </div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">婚礼地点</label>
+            <input type="text" id="pre-venue" class="form-input" placeholder="酒店/宴会厅名称" style="width:100%;">
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">销售负责人</label>
+            <input type="text" id="pre-sales" class="form-input" placeholder="销售顾问姓名" style="width:100%;">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">定金金额</label>
+            <input type="number" id="pre-deposit" class="form-input" placeholder="已收定金金额" style="width:100%;">
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">尾款状态</label>
+            <select id="pre-balance" class="form-select" style="width:100%;">
+              <option value="unpaid">💸 未付款</option>
+              <option value="partial">💰 部分付款</option>
+              <option value="paid">✅ 已结清</option>
+            </select>
+          </div>
+        </div>
         <div>
           <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">订单备注</label>
-          <textarea id="pre-remark" class="form-input" rows="3" placeholder="可选：如婚礼地点、特殊要求、对接说明等..." style="width:100%;resize:vertical;font-family:'Noto Serif SC',serif;"></textarea>
+          <textarea id="pre-remark" class="form-input" rows="2" placeholder="可选：婚礼主题、特殊要求、对接说明等..." style="width:100%;resize:vertical;font-family:'Noto Serif SC',serif;"></textarea>
         </div>
       </div>
     </div>
@@ -539,6 +670,10 @@ function handleConfirmBooking() {
       confirmBtn.addEventListener('click', function() {
         const customerName = document.getElementById('pre-customer').value.trim();
         const customerPhone = document.getElementById('pre-phone').value.trim();
+        const venue = document.getElementById('pre-venue').value.trim();
+        const sales = document.getElementById('pre-sales').value.trim();
+        const deposit = parseFloat(document.getElementById('pre-deposit').value) || 0;
+        const balance = document.getElementById('pre-balance').value;
         const remark = document.getElementById('pre-remark').value.trim();
 
         if (!customerName) {
@@ -556,8 +691,13 @@ function handleConfirmBooking() {
           date: currentWeddingDate,
           customerName: customerName,
           customerPhone: customerPhone,
+          weddingVenue: venue,
+          salesPerson: sales,
+          depositAmount: deposit,
+          balanceStatus: balance,
           remark: remark,
           contractNo: contractNo,
+          contractStatus: CONTRACT_STATUS.DRAFT,
           emceeId: emcee.id,
           photographerId: photographer.id,
           cameramanId: cameraman.id,
@@ -570,30 +710,11 @@ function handleConfirmBooking() {
 
         setTimeout(() => {
           switchView('contract');
-          document.getElementById('contract-date').value = currentWeddingDate;
-          document.getElementById('contract-customer').value = customerName;
-          document.getElementById('contract-phone').value = customerPhone;
-          if (document.getElementById('contract-remark')) {
-            document.getElementById('contract-remark').value = remark;
-          }
-          document.getElementById('contract-emcee').value = emcee.id;
-          document.getElementById('contract-photographer').value = photographer.id;
-          document.getElementById('contract-cameraman').value = cameraman.id;
-          document.getElementById('contract-makeup').value = makeup.id;
-          document.getElementById('contract-no').value = contractNo;
-          updateContractTotal();
-          renderContractPreviewFromForm();
           populateContractBookingSelect();
-          setTimeout(() => {
-            const sel = document.getElementById('contract-booking');
-            for (let i = 0; i < sel.options.length; i++) {
-              if (sel.options[i].value === booking.id) {
-                sel.selectedIndex = i;
-                break;
-              }
-            }
-          }, 100);
-        }, 600);
+          const sel = document.getElementById('contract-booking');
+          sel.value = booking.id;
+          sel.dispatchEvent(new Event('change'));
+        }, 300);
       });
     }
   }, 50);
@@ -636,6 +757,10 @@ function handleManualBooking() {
   const date = document.getElementById('booking-date').value;
   const customerName = document.getElementById('booking-customer').value.trim();
   const customerPhone = document.getElementById('booking-phone').value.trim();
+  const venue = document.getElementById('booking-venue') ? document.getElementById('booking-venue').value.trim() : '';
+  const sales = document.getElementById('booking-sales') ? document.getElementById('booking-sales').value.trim() : '';
+  const deposit = document.getElementById('booking-deposit') ? parseFloat(document.getElementById('booking-deposit').value) || 0 : 0;
+  const balance = document.getElementById('booking-balance') ? document.getElementById('booking-balance').value : 'unpaid';
   const remark = document.getElementById('booking-remark') ? document.getElementById('booking-remark').value.trim() : '';
 
   if (!staffId || !date) {
@@ -654,11 +779,21 @@ function handleManualBooking() {
   }
 
   const contractNo = generateContractNo();
-  const result = addSingleBooking(type, staffId, date, customerName, customerPhone, remark, contractNo);
+  const extraData = {
+    weddingVenue: venue,
+    salesPerson: sales,
+    depositAmount: deposit,
+    balanceStatus: balance
+  };
+  const result = addSingleBooking(type, staffId, date, customerName, customerPhone, remark, contractNo, extraData);
   if (result.success) {
     showToast('预订保存成功！', 'success');
     document.getElementById('booking-customer').value = '';
     document.getElementById('booking-phone').value = '';
+    if (document.getElementById('booking-venue')) document.getElementById('booking-venue').value = '';
+    if (document.getElementById('booking-sales')) document.getElementById('booking-sales').value = '';
+    if (document.getElementById('booking-deposit')) document.getElementById('booking-deposit').value = '';
+    if (document.getElementById('booking-balance')) document.getElementById('booking-balance').value = 'unpaid';
     if (document.getElementById('booking-remark')) {
       document.getElementById('booking-remark').value = '';
     }
@@ -708,6 +843,9 @@ function openEditBookingModal(bookingId) {
     ? `<div style="margin-bottom:12px;padding:10px 14px;background:rgba(212,165,116,0.1);border-radius:8px;font-size:12px;color:#B8956A;">📄 关联合同：<strong style="color:#6B4423;">${booking.contractNo}</strong>（修改后合同页打开将自动读取最新信息）</div>`
     : `<div style="margin-bottom:12px;padding:10px 14px;background:rgba(201,24,74,0.05);border-radius:8px;font-size:12px;color:#A0896C;">⚠️ 尚未生成正式合同编号</div>`;
 
+  const statusLabel = CONTRACT_STATUS_LABELS[booking.contractStatus] || CONTRACT_STATUS_LABELS.not_generated;
+  const balanceLabel = BALANCE_STATUS_LABELS[booking.balanceStatus] || BALANCE_STATUS_LABELS.unpaid;
+
   const html = `
     <div class="modal-header">
       <h3 class="modal-title">✏️ 编辑预订记录</h3>
@@ -716,6 +854,11 @@ function openEditBookingModal(bookingId) {
     <div class="modal-body" style="padding:20px 28px;">
       ${staffInfoHTML}
       ${contractBadge}
+      <div style="margin-bottom:16px;padding:10px 14px;background:#FAF5EA;border-radius:8px;display:flex;gap:16px;">
+        <div style="font-size:12px;">📄 合同状态：<strong style="color:${statusLabel.color};">${statusLabel.icon} ${statusLabel.label}</strong></div>
+        <div style="font-size:12px;">💰 付款状态：<strong style="color:${balanceLabel.color};">${balanceLabel.icon} ${balanceLabel.label}</strong></div>
+        ${booking.depositAmount > 0 ? `<div style="font-size:12px;">已收定金：<strong style="color:#2D6A4F;">${formatCurrency(booking.depositAmount)}</strong></div>` : ''}
+      </div>
       <div style="display:flex;flex-direction:column;gap:14px;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
           <div>
@@ -727,13 +870,37 @@ function openEditBookingModal(bookingId) {
             <input type="tel" id="edit-phone" class="form-input" placeholder="请输入联系电话" style="width:100%;" value="${booking.customerPhone || ''}">
           </div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">婚礼地点</label>
+            <input type="text" id="edit-venue" class="form-input" placeholder="酒店/宴会厅名称" style="width:100%;" value="${booking.weddingVenue || ''}">
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">销售负责人</label>
+            <input type="text" id="edit-sales" class="form-input" placeholder="销售顾问姓名" style="width:100%;" value="${booking.salesPerson || ''}">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">定金金额</label>
+            <input type="number" id="edit-deposit" class="form-input" placeholder="已收定金金额" style="width:100%;" value="${booking.depositAmount || ''}">
+          </div>
+          <div>
+            <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">尾款状态</label>
+            <select id="edit-balance" class="form-select" style="width:100%;">
+              <option value="unpaid" ${booking.balanceStatus === 'unpaid' ? 'selected' : ''}>💸 未付款</option>
+              <option value="partial" ${booking.balanceStatus === 'partial' ? 'selected' : ''}>💰 部分付款</option>
+              <option value="paid" ${booking.balanceStatus === 'paid' ? 'selected' : ''}>✅ 已结清</option>
+            </select>
+          </div>
+        </div>
         <div>
           <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">婚礼日期 <span style="color:#C9184A;">*</span></label>
           <input type="date" id="edit-date" class="form-input" style="width:100%;" value="${booking.date}" min="${getToday()}">
         </div>
         <div>
           <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:500;color:#6B4423;">订单备注</label>
-          <textarea id="edit-remark" class="form-input" rows="3" placeholder="可选：婚礼地点、特殊要求、对接说明等..." style="width:100%;resize:vertical;font-family:'Noto Serif SC',serif;">${booking.remark || ''}</textarea>
+          <textarea id="edit-remark" class="form-input" rows="3" placeholder="可选：婚礼主题、特殊要求、对接说明等..." style="width:100%;resize:vertical;font-family:'Noto Serif SC',serif;">${booking.remark || ''}</textarea>
         </div>
         <div id="edit-warning" class="conflict-warning hidden" style="margin-top:4px;">
           <span id="edit-warning-text"></span>
@@ -805,6 +972,10 @@ function openEditBookingModal(bookingId) {
       saveBtn.addEventListener('click', function() {
         const customerName = document.getElementById('edit-customer').value.trim();
         const customerPhone = document.getElementById('edit-phone').value.trim();
+        const venue = document.getElementById('edit-venue').value.trim();
+        const sales = document.getElementById('edit-sales').value.trim();
+        const deposit = parseFloat(document.getElementById('edit-deposit').value) || 0;
+        const balance = document.getElementById('edit-balance').value;
         const date = document.getElementById('edit-date').value;
         const remark = document.getElementById('edit-remark').value.trim();
 
@@ -836,6 +1007,10 @@ function openEditBookingModal(bookingId) {
         const result = updateBooking(bookingId, {
           customerName: customerName,
           customerPhone: customerPhone,
+          weddingVenue: venue,
+          salesPerson: sales,
+          depositAmount: deposit,
+          balanceStatus: balance,
           date: date,
           remark: remark
         });

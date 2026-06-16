@@ -12,6 +12,34 @@ const TYPE_LABELS = {
   makeup: { label: '化妆师', icon: '💄' }
 };
 
+const CONTRACT_STATUS = {
+  NOT_GENERATED: 'not_generated',
+  DRAFT: 'draft',
+  PRINTED: 'printed',
+  SIGNED: 'signed',
+  CANCELLED: 'cancelled'
+};
+
+const CONTRACT_STATUS_LABELS = {
+  not_generated: { label: '未生成', icon: '⚪', color: '#A0896C' },
+  draft: { label: '草稿', icon: '📝', color: '#2D6A4F' },
+  printed: { label: '已打印', icon: '🖨️', color: '#B8956A' },
+  signed: { label: '已签约', icon: '✅', color: '#2D6A4F' },
+  cancelled: { label: '已取消', icon: '❌', color: '#C92A2A' }
+};
+
+const BALANCE_STATUS = {
+  UNPAID: 'unpaid',
+  PARTIAL: 'partial',
+  PAID: 'paid'
+};
+
+const BALANCE_STATUS_LABELS = {
+  unpaid: { label: '未付款', icon: '💸', color: '#C92A2A' },
+  partial: { label: '部分付款', icon: '💰', color: '#B8956A' },
+  paid: { label: '已结清', icon: '✅', color: '#2D6A4F' }
+};
+
 const STORAGE_KEYS = {
   STAFF: 'wedding_staff_list',
   BOOKINGS: 'wedding_bookings',
@@ -186,7 +214,7 @@ function isStaffAvailable(staffId, date) {
   return !staff.bookedDates.includes(date);
 }
 
-function getBookings() {
+function getBookings(filters = {}) {
   if (!bookingsCache) {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.BOOKINGS);
@@ -195,7 +223,31 @@ function getBookings() {
       bookingsCache = [];
     }
   }
-  return bookingsCache;
+  let result = bookingsCache;
+  if (filters.date) {
+    result = result.filter(b => b.date === filters.date);
+  }
+  if (filters.customerName) {
+    const keyword = filters.customerName.toLowerCase();
+    result = result.filter(b => b.customerName && b.customerName.toLowerCase().includes(keyword));
+  }
+  if (filters.contractStatus) {
+    result = result.filter(b => b.contractStatus === filters.contractStatus);
+  }
+  if (filters.staffType) {
+    if (filters.staffType === 'full_package') {
+      result = result.filter(b => !b.singleType && b.emceeId && b.photographerId && b.cameramanId && b.makeupId);
+    } else {
+      result = result.filter(b => b.singleType === filters.staffType);
+    }
+  }
+  if (filters.staffId) {
+    const sid = filters.staffId;
+    result = result.filter(b => 
+      b.emceeId === sid || b.photographerId === sid || b.cameramanId === sid || b.makeupId === sid
+    );
+  }
+  return result;
 }
 
 function getBookingById(id) {
@@ -213,6 +265,11 @@ function addBooking(booking) {
   booking.createdAt = new Date().toISOString();
   if (!booking.remark) booking.remark = '';
   if (!booking.contractNo) booking.contractNo = '';
+  if (!booking.contractStatus) booking.contractStatus = CONTRACT_STATUS.NOT_GENERATED;
+  if (!booking.weddingVenue) booking.weddingVenue = '';
+  if (!booking.salesPerson) booking.salesPerson = '';
+  if (!booking.depositAmount) booking.depositAmount = 0;
+  if (!booking.balanceStatus) booking.balanceStatus = BALANCE_STATUS.UNPAID;
   list.push(booking);
   saveBookings(list);
   if (booking.emceeId) updateStaffBookedDates(booking.emceeId, booking.date, true);
@@ -285,7 +342,7 @@ function updateBooking(bookingId, updates) {
   return { success: true, booking: newBooking };
 }
 
-function addSingleBooking(type, staffId, date, customerName, customerPhone, remark, contractNo) {
+function addSingleBooking(type, staffId, date, customerName, customerPhone, remark, contractNo, extraData = {}) {
   const staff = getStaffById(staffId);
   if (!staff) return { success: false, message: '人员不存在' };
   if (staff.bookedDates.includes(date)) {
@@ -299,6 +356,11 @@ function addSingleBooking(type, staffId, date, customerName, customerPhone, rema
     customerPhone: customerPhone || '',
     remark: remark || '',
     contractNo: contractNo || '',
+    contractStatus: CONTRACT_STATUS.NOT_GENERATED,
+    weddingVenue: extraData.weddingVenue || '',
+    salesPerson: extraData.salesPerson || '',
+    depositAmount: extraData.depositAmount || 0,
+    balanceStatus: extraData.balanceStatus || BALANCE_STATUS.UNPAID,
     emceeId: type === STAFF_TYPES.EMCEE ? staffId : null,
     photographerId: type === STAFF_TYPES.PHOTOGRAPHER ? staffId : null,
     cameramanId: type === STAFF_TYPES.CAMERAMAN ? staffId : null,
@@ -311,6 +373,14 @@ function addSingleBooking(type, staffId, date, customerName, customerPhone, rema
   saveBookings(list);
   updateStaffBookedDates(staffId, date, true);
   return { success: true, booking };
+}
+
+function updateContractStatus(bookingId, newStatus) {
+  const result = updateBooking(bookingId, { contractStatus: newStatus });
+  if (result.success) {
+    bookingsCache = null;
+  }
+  return result;
 }
 
 function resetAllData() {

@@ -154,6 +154,30 @@
                 </div>
               </div>
               <div class="form-row">
+                <div class="form-field">
+                  <label>婚礼地点</label>
+                  <input type="text" id="booking-venue" class="form-input" placeholder="酒店/宴会厅名称">
+                </div>
+                <div class="form-field">
+                  <label>销售负责人</label>
+                  <input type="text" id="booking-sales" class="form-input" placeholder="销售顾问姓名">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label>定金金额</label>
+                  <input type="number" id="booking-deposit" class="form-input" placeholder="已收定金金额">
+                </div>
+                <div class="form-field">
+                  <label>尾款状态</label>
+                  <select id="booking-balance" class="form-select">
+                    <option value="unpaid">💸 未付款</option>
+                    <option value="partial">💰 部分付款</option>
+                    <option value="paid">✅ 已结清</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
                 <div class="form-field form-field-full">
                   <label>订单备注</label>
                   <textarea id="booking-remark" class="form-input" rows="2" placeholder="可选：特殊要求、对接说明等" style="resize:vertical;font-family:'Noto Serif SC',serif;"></textarea>
@@ -181,13 +205,26 @@
           <h3 class="panel-title">📋 所有预订记录</h3>
           <div class="booking-list-filters">
             <input type="date" id="filter-date" class="form-input form-input-sm" placeholder="按日期筛选">
+            <input type="text" id="filter-customer" class="form-input form-input-sm" placeholder="🔍 搜索客户姓名">
+            <select id="filter-status" class="form-select form-select-sm">
+              <option value="">全部状态</option>
+              <option value="not_generated">⚪ 未生成</option>
+              <option value="draft">📝 草稿</option>
+              <option value="printed">🖨️ 已打印</option>
+              <option value="signed">✅ 已签约</option>
+              <option value="cancelled">❌ 已取消</option>
+            </select>
             <select id="filter-type" class="form-select form-select-sm">
               <option value="">全部类型</option>
-              <option value="emcee">司仪</option>
-              <option value="photographer">摄影</option>
-              <option value="cameraman">摄像</option>
-              <option value="makeup">化妆</option>
+              <option value="full_package">🎎 四大金刚整套</option>
+              <option value="emcee">🎤 司仪</option>
+              <option value="photographer">📷 摄影</option>
+              <option value="cameraman">🎥 摄像</option>
+              <option value="makeup">💄 化妆</option>
             </select>
+            <button type="button" id="btn-clear-filters" class="btn btn-secondary btn-sm" style="padding:6px 12px;font-size:12px;">
+              清除筛选
+            </button>
           </div>
           <div id="booking-list" class="booking-list"></div>
         </div>
@@ -215,12 +252,53 @@
               </div>
               <div class="form-row">
                 <div class="form-field">
+                  <label>婚礼地点</label>
+                  <input type="text" id="contract-venue" class="form-input" placeholder="酒店/宴会厅名称">
+                </div>
+                <div class="form-field">
+                  <label>销售负责人</label>
+                  <input type="text" id="contract-sales" class="form-input" placeholder="销售顾问姓名">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label>定金金额</label>
+                  <input type="number" id="contract-deposit" class="form-input" placeholder="已收定金金额">
+                </div>
+                <div class="form-field">
+                  <label>尾款状态</label>
+                  <select id="contract-balance" class="form-select">
+                    <option value="unpaid">💸 未付款</option>
+                    <option value="partial">💰 部分付款</option>
+                    <option value="paid">✅ 已结清</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
                   <label>婚礼日期</label>
                   <input type="date" id="contract-date" class="form-input">
                 </div>
                 <div class="form-field">
                   <label>合同编号</label>
                   <input type="text" id="contract-no" class="form-input" readonly>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-field">
+                  <label>合同状态</label>
+                  <select id="contract-status" class="form-select">
+                    <option value="not_generated">⚪ 未生成</option>
+                    <option value="draft">📝 草稿</option>
+                    <option value="printed">🖨️ 已打印</option>
+                    <option value="signed">✅ 已签约</option>
+                    <option value="cancelled">❌ 已取消</option>
+                  </select>
+                </div>
+                <div class="form-field" style="display:flex;align-items:flex-end;gap:8px;">
+                  <button type="button" id="btn-mark-signed" class="btn btn-secondary" style="flex:1;">
+                    <span class="btn-icon">✅</span> 标记已签约
+                  </button>
                 </div>
               </div>
               <div class="form-row">

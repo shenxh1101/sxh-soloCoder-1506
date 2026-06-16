@@ -171,12 +171,12 @@ function renderStaffList(type) {
   container.innerHTML = html;
 }
 
-function renderBookingList() {
-  const bookings = getBookings().slice().reverse();
+function renderBookingList(filters = {}) {
+  const bookings = getBookings(filters).slice().reverse();
   const container = document.getElementById('booking-list');
 
   if (bookings.length === 0) {
-    container.innerHTML = '<p class="empty-text small" style="padding:32px;">暂无预订记录</p>';
+    container.innerHTML = '<p class="empty-text small" style="padding:32px;">暂无匹配的预订记录</p>';
     return;
   }
 
@@ -200,15 +200,28 @@ function renderBookingList() {
     }
 
     const contractBadge = b.contractNo
-      ? `<span style="display:inline-block;font-size:10px;background:rgba(212,165,116,0.15);color:#B8956A;padding:2px 8px;border-radius:10px;margin-left:8px;">📄 ${b.contractNo}</span>`
+      ? `<span style="display:inline-block;font-size:10px;background:rgba(212,165,116,0.15);color:#B8956A;padding:2px 8px;border-radius:10px;margin-left:6px;">📄 ${b.contractNo}</span>`
       : '';
+
+    const statusLabel = CONTRACT_STATUS_LABELS[b.contractStatus] || CONTRACT_STATUS_LABELS.not_generated;
+    const statusBadge = `<span style="display:inline-block;font-size:10px;background:${statusLabel.color}15;color:${statusLabel.color};padding:2px 8px;border-radius:10px;margin-left:6px;">${statusLabel.icon} ${statusLabel.label}</span>`;
+
+    const balanceLabel = BALANCE_STATUS_LABELS[b.balanceStatus] || BALANCE_STATUS_LABELS.unpaid;
+    const balanceBadge = `<span style="display:inline-block;font-size:10px;background:${balanceLabel.color}15;color:${balanceLabel.color};padding:2px 8px;border-radius:10px;margin-left:6px;">${balanceLabel.icon} ${balanceLabel.label}</span>`;
+
+    const subInfo = [];
+    subInfo.push(`客户：${b.customerName || '未填写'}`);
+    if (b.customerPhone) subInfo.push(b.customerPhone);
+    if (b.salesPerson) subInfo.push(`销售：${b.salesPerson}`);
+    if (b.depositAmount > 0) subInfo.push(`定金：${formatCurrency(b.depositAmount)}`);
+    if (b.remark) subInfo.push(`💬 ${b.remark.substring(0, 15) + (b.remark.length > 15 ? '...' : '')}`);
 
     html += `
       <div class="booking-item" data-booking-id="${b.id}">
         <div class="booking-type-icon">${typeIcon}</div>
         <div class="booking-info">
-          <div class="booking-info-main">${staffName}${contractBadge}</div>
-          <div class="booking-info-sub">客户：${b.customerName || '未填写'} ${b.customerPhone ? '· ' + b.customerPhone : ''}${b.remark ? ' · 💬 ' + b.remark.substring(0, 20) + (b.remark.length > 20 ? '...' : '') : ''}</div>
+          <div class="booking-info-main">${staffName}${contractBadge}${statusBadge}${balanceBadge}</div>
+          <div class="booking-info-sub">${subInfo.join(' · ')}</div>
         </div>
         <div class="booking-date">${b.date}</div>
         <div style="display:flex;gap:6px;">
@@ -262,6 +275,8 @@ function populateContractBookingSelect() {
       }
       const customerText = b.customerName || '未命名客户';
       const contractBadge = b.contractNo ? ` [${b.contractNo}]` : '';
+      const statusLabel = CONTRACT_STATUS_LABELS[b.contractStatus] || CONTRACT_STATUS_LABELS.not_generated;
+      const statusText = ` ${statusLabel.icon}${statusLabel.label}`;
       return `<option value="${b.id}" 
         data-date="${b.date}" 
         data-emcee="${b.emceeId || ''}" 
@@ -270,9 +285,14 @@ function populateContractBookingSelect() {
         data-makeup="${b.makeupId || ''}" 
         data-customer="${b.customerName || ''}" 
         data-phone="${b.customerPhone || ''}"
+        data-venue="${(b.weddingVenue || '').replace(/"/g, '&quot;')}"
+        data-sales="${(b.salesPerson || '').replace(/"/g, '&quot;')}"
+        data-deposit="${b.depositAmount || 0}"
+        data-balance="${b.balanceStatus || 'unpaid'}"
+        data-status="${b.contractStatus || 'not_generated'}"
         data-remark="${(b.remark || '').replace(/"/g, '&quot;')}"
         data-istype="${b.singleType || ''}"
         data-contractno="${b.contractNo || ''}"
-      >${b.date} · ${typeLabel} · ${customerText}${contractBadge} · ${formatCurrency(b.totalPrice)}</option>`;
+      >${b.date} · ${typeLabel} · ${customerText}${contractBadge}${statusText} · ${formatCurrency(b.totalPrice)}</option>`;
     }).join('');
 }
